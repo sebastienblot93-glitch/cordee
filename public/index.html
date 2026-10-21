@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cordée — plateforme coopérative</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Nunito:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --night: #16163a;
+      --night-2: #22225a;
+      --chalk: #f3efe4;
+      --muted: #a9a8cf;
+      --sun: #ffd24a;
+      --danger: #ff6b6b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: var(--night); color: var(--chalk);
+      font-family: 'Nunito', system-ui, sans-serif; font-size: 18px;
+    }
+    h1, h2, button, .code { font-family: 'Silkscreen', 'Courier New', monospace; }
+    h1 { font-size: clamp(2.2rem, 8vw, 4rem); margin: 0 0 .25rem; letter-spacing: .02em; }
+    h2 { font-size: 1.1rem; margin: 0 0 1rem; font-weight: 400; color: var(--muted); }
+    main { width: min(560px, 92vw); padding: 2rem 0; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .tagline { color: var(--muted); margin: 0 0 2rem; }
+
+    .panel { background: var(--night-2); padding: 1.25rem; margin-bottom: 1rem; border-radius: 6px; }
+    label { display: block; margin-bottom: .4rem; color: var(--muted); font-size: .9rem; }
+    input {
+      width: 100%; padding: .7rem .8rem; font: inherit; color: var(--chalk);
+      background: var(--night); border: 2px solid #4a4a8a; border-radius: 4px;
+    }
+    input:focus-visible, button:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+    .row { display: flex; gap: .6rem; }
+    .row > input { flex: 1; text-transform: uppercase; }
+    button {
+      padding: .75rem 1.1rem; font-size: .95rem; cursor: pointer; border: 0; border-radius: 4px;
+      background: var(--sun); color: #2a2200; font-weight: 700;
+    }
+    button.ghost { background: transparent; color: var(--chalk); border: 2px solid #4a4a8a; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .full { width: 100%; }
+    .error { color: var(--danger); min-height: 1.4em; margin: .5rem 0 0; }
+
+    .code { font-size: 3rem; letter-spacing: .25em; color: var(--sun); margin: 0 0 .5rem; }
+    ul.players { list-style: none; padding: 0; margin: 0 0 1rem; display: grid; gap: .5rem; }
+    ul.players li { display: flex; align-items: center; gap: .7rem; }
+    .dot { width: 18px; height: 22px; border-radius: 3px; flex: none; }
+    .tag { color: var(--muted); font-size: .85rem; }
+
+    #game-wrap { position: relative; width: min(960px, 96vw); }
+    canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: pixelated; }
+    #banner {
+      position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+      font-family: 'Silkscreen', monospace; font-size: clamp(1.4rem, 5vw, 3rem); color: var(--sun);
+      background: rgba(13, 13, 38, .6);
+    }
+    #banner.show { display: grid; }
+    .hint { color: var(--muted); font-size: .9rem; margin-top: .6rem; text-align: center; }
+    select {
+      width: 100%; padding: .7rem .8rem; font: inherit; color: var(--chalk);
+      background: var(--night); border: 2px solid #4a4a8a; border-radius: 4px;
+    }
+    select:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+    #hud {
+      display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .5rem;
+      font-family: 'Silkscreen', 'Courier New', monospace; font-size: 1rem; color: var(--chalk);
+    }
+    #hud-keys { color: var(--sun); }
+    #canvas { cursor: crosshair; }
+    #level-hint { color: var(--chalk); font-size: 1rem; }
+  </style>
+</head>
+<body>
+  <main id="menu-root">
+    <section id="screen-menu" class="screen active">
+      <h1>Cordée</h1>
+      <p class="tagline">Un jeu de plateforme où personne n’arrive seul à la sortie.</p>
+
+      <div class="panel">
+        <label for="name">Ton pseudo</label>
+        <input id="name" maxlength="12" placeholder="Joueur" autocomplete="off">
+      </div>
+      <div class="panel">
+        <button id="btn-create" class="full">Créer une room privée</button>
+      </div>
+      <div class="panel">
+        <label for="code">Rejoindre avec un code</label>
+        <div class="row">
+          <input id="code" maxlength="4" placeholder="ABCD" autocomplete="off">
+          <button id="btn-join" class="ghost">Rejoindre</button>
+        </div>
+      </div>
+      <p id="menu-error" class="error" role="alert"></p>
+    </section>
+
+    <section id="screen-lobby" class="screen">
+      <h2>Code de la room</h2>
+      <p id="lobby-code" class="code"></p>
+      <div class="panel">
+        <button id="btn-copy" class="ghost full">Copier le lien d’invitation</button>
+      </div>
+      <h2>Joueurs</h2>
+      <ul id="lobby-players" class="players"></ul>
+      <div class="panel">
+        <label for="role-select">Ton rôle (niveaux Arcanes)</label>
+        <select id="role-select">
+          <option value="mage">Mage : orbes, glace, lumière</option>
+          <option value="archer">Archer : flèches, double saut, dash</option>
+        </select>
+      </div>
+      <div id="level-panel" class="panel" style="display:none">
+        <label for="level-select">Niveau de départ</label>
+        <select id="level-select"></select>
+      </div>
+      <button id="btn-start" class="full">Lancer la partie</button>
+      <p id="lobby-wait" class="tag" style="display:none">En attente du chef de room…</p>
+      <p id="lobby-error" class="error" role="alert"></p>
+    </section>
+  </main>
+
+  <section id="screen-game" class="screen" style="width:min(960px,96vw)">
+    <div id="hud"><span id="hud-level"></span><span id="hud-keys"></span><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span></div>
+    <div id="game-wrap">
+      <canvas id="canvas"></canvas>
+      <div id="banner">Niveau réussi !</div>
+    </div>
+    <p id="level-hint" class="hint"></p>
+    <p id="role-hint" class="hint"></p>
+    <p class="hint">R recommence le niveau, N passe au suivant (chef de room).</p>
+  </section>
+
+  <script src="/physics.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
