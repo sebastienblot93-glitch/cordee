@@ -174,7 +174,7 @@
   function newPlayerState(kit) {
     return {
       kit: kit || 'plain', x: 0, y: 0, vy: 0, onGround: false, face: 1,
-      airJump: true, dashAvail: true, dashT: 0, dashDir: 1, dashCd: 0,
+      airJump: true, dashAvail: true, dashT: 0, dashDir: 1, dashCd: 0, jumpBuf: 0,
       input: { left: false, right: false, jump: false, jumpEdge: false, dash: false },
     };
   }
@@ -203,12 +203,17 @@
 
     moveAxis(L, p, 'x', dir * PHYS.speed);
 
-    if (inp.jump && p.onGround) {
+    // Une pression de saut juste avant l'atterrissage est gardée en mémoire quelques ticks
+    if (inp.jumpEdge) p.jumpBuf = 8;
+    if ((inp.jump || p.jumpBuf > 0) && p.onGround) {
       p.vy = PHYS.jump;
+      p.jumpBuf = 0;
     } else if (kit.doubleJump && inp.jumpEdge && !p.onGround && p.airJump) {
       p.vy = PHYS.jump;
       p.airJump = false;
+      p.jumpBuf = 0;
     }
+    if (p.jumpBuf > 0) p.jumpBuf--;
     p.vy = Math.min(p.vy + PHYS.gravity, PHYS.maxFall);
     p.onGround = false;
     if (moveAxis(L, p, 'y', p.vy)) {
@@ -297,14 +302,25 @@
         const top = a.y < b.y ? a : b;
         const bottom = top === a ? b : a;
         const depth = top.y + PH - bottom.y;
+        // Plus les deux joueurs se rapprochent vite (l'un monte, l'autre descend), plus on tolère de recouvrement
+        const closing = (top.vy || 0) - (bottom.vy || 0);
+        const maxDepth = Math.min(PH - 4, Math.max(14, closing + 3));
 
-        if (top.vy >= 0 && depth <= 14) {
+        let landed = false;
+        if (top.vy >= 0 && depth <= maxDepth) {
+          const oldY = top.y;
           top.y = bottom.y - PH;
-          top.vy = 0;
-          top.onGround = true;
-          top.airJump = true;
-          top.dashAvail = true;
-        } else {
+          if (hitsTile(L, top.x, top.y)) {
+            top.y = oldY; // plafond au-dessus : on ne se pose pas, on se pousse sur le côté
+          } else {
+            top.vy = 0;
+            top.onGround = true;
+            top.airJump = true;
+            top.dashAvail = true;
+            landed = true;
+          }
+        }
+        if (!landed) {
           const dx = a.x + PW / 2 - (b.x + PW / 2);
           const sgn = dx >= 0 ? 1 : -1;
           const shift = (PW - Math.abs(dx)) / 2;
@@ -317,11 +333,32 @@
     }
   }
 
+  // Dégage un joueur coincé dans un mur (par sécurité) : on cherche la case libre la plus proche
+  function unstick(L, p) {
+    if (!hitsTile(L, p.x, p.y)) return false;
+    const x0 = p.x;
+    const y0 = p.y;
+    for (let r = 1; r <= 48; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (!hitsTile(L, x0 + dx, y0 + dy)) {
+            p.x = x0 + dx;
+            p.y = y0 + dy;
+            p.vy = 0;
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   const API = {
     TILE, PW, PH, PHYS, PROJ, SPELL, KITS,
     parseLevel, tileSolid, hitsTile, gatesTouching, overlapsAnyBlocker, moveAxis,
     newPlayerState, stepPlayer, touchesRect, hitsSpikes,
-    launchProjectile, stepProjectile, projectilePath, resolvePlayers,
+    launchProjectile, stepProjectile, projectilePath, resolvePlayers, unstick,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else window.Physics = API;

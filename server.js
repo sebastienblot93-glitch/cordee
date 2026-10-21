@@ -5,7 +5,7 @@ const { WebSocketServer } = require('ws');
 const { LEVELS } = require('./levels');
 const {
   TILE, PW, PH, SPELL, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
-  touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers,
+  touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick,
 } = require('./physics');
 
 const PORT = process.env.PORT || 3000;
@@ -330,6 +330,7 @@ function tick(room) {
   updateWorld(room, list);
 
   for (const p of list) {
+    unstick(L, p);
     p.input.jumpEdge = p.jumpPending;
     p.input.dash = p.dashPending;
     stepPlayer(L, p);
