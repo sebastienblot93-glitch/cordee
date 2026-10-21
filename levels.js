@@ -67,6 +67,17 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, hold: { 1: 300 } }),
 
+  make('Le tireur', 'Le Mage ouvre la première porte (orbe sur le cristal). L’Archer tire par le hublot du mur sur la cible : la flèche retombe, visez un peu plus haut.', ({ rect, put }) => {
+    put(4, 8, 'y'); // cristal du Mage
+    rect(8, 1, 1, 13, 'b'); // première porte
+    rect(15, 1, 2, 13); // mur
+    rect(15, 8, 2, 3, '.'); // hublot de 3 cases
+    rect(15, 11, 2, 3, 'a'); // porte au pied du mur
+    put(22, 8, 'o'); // cible derrière le mur
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, hold: { 1: 0, 2: 0 } }),
+
   make('Le gouffre', 'Un gouffre trop large pour sauter. Le Mage pose de la glace sur les runes (clic droit) ; seul l’Archer atteint la clé.', ({ rect, put }) => {
     rect(6, 14, 18, 1, '^'); // fond du gouffre : pics (18 cases, même l'Archer ne passe pas seul)
     put(10, 13, 'r');
@@ -78,8 +89,22 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true }),
 
-  make('Dans le noir', 'Seul le Mage éclaire. Des plateformes invisibles traversent le vide : trouvez-les, rapportez la clé.', ({ rect, put }) => {
+  make('L’escalier de glace', 'Le Mage bâtit un escalier de glace (clic droit) pour atteindre la clé tout en haut. L’Archer tire sur la cible en haut à droite pour ouvrir la porte de sortie.', ({ rect, put }) => {
+    put(7, 12, 'r');
+    put(10, 10, 'r');
+    put(13, 8, 'r');
+    rect(16, 7, 5, 1); // grande corniche tout en haut
+    put(18, 6, 'K');
+    put(24, 5, 'o'); // cible de l'Archer
+    rect(26, 1, 1, 13, 'a'); // porte devant la sortie
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, hold: { 1: 0 } }),
+
+  make('Dans le noir', 'Seul le Mage éclaire. Le Mage ouvre la porte de départ, puis des plateformes invisibles traversent les pics : l’Archer saute deux fois pour prendre la clé tout en haut.', ({ rect, put }) => {
     rect(5, 14, 20, 1, '^');
+    rect(4, 1, 1, 13, 'a'); // porte de départ
+    put(2, 6, 'x'); // cristal du Mage
     rect(7, 12, 2, 1, 'h');
     rect(11, 10, 2, 1, 'h');
     rect(15, 11, 2, 1, 'h');
@@ -87,11 +112,36 @@ const LEVELS = [
     rect(23, 11, 2, 1, 'h');
     put(11, 9, 'C');
     put(23, 10, 'C');
-    rect(26, 10, 3, 1);
-    put(27, 9, 'K');
+    rect(26, 6, 3, 1); // corniche très haute : double saut de l'Archer
+    put(27, 5, 'K');
     put(3, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, dark: true }),
+  }, { abilities: true, dark: true, hold: { 1: 0 } }),
+
+  make('Le va-et-vient', 'Le Mage ouvre la porte (orbe sur le cristal). Seul l’Archer peut sauter de pilier en pilier chercher la clé et revenir. Rendez-vous à la porte de départ.', ({ rect, put }) => {
+    rect(5, 14, 17, 1, '^'); // fosse de pics
+    rect(5, 1, 1, 13, 'a'); // porte entre la rive de départ et la fosse
+    put(2, 4, 'x'); // cristal du Mage
+    rect(8, 10, 1, 4); // piliers à 4 cases de haut
+    rect(13, 10, 1, 4);
+    rect(18, 10, 1, 4);
+    put(18, 9, 'K');
+    put(3, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, hold: { 1: 0 } }),
+
+  make('Le judas', 'Le Mage monte sur les marches, puis tire une orbe dans le judas du mur pour ouvrir la porte. L’Archer file chercher la clé de l’autre côté.', ({ rect, put }) => {
+    rect(3, 12, 3, 1); // marches de 2 cases
+    rect(7, 10, 3, 1);
+    rect(15, 1, 2, 13); // mur
+    rect(15, 4, 2, 3, '.'); // judas de 3 cases, trop haut pour passer à pied
+    rect(15, 7, 2, 7, 'a'); // porte au pied du mur
+    put(18, 4, 'x'); // cristal derrière le mur
+    rect(22, 10, 4, 1); // corniche à 4 cases : double saut de l'Archer
+    put(23, 9, 'K');
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, hold: { 1: 0 } }),
 
   make('Tir d’adresse', 'La flèche doit passer par la meurtrière quand le volet s’ouvre. Visez et tirez en plein saut.', ({ rect, put }) => {
     rect(18, 1, 2, 13); // grand mur
