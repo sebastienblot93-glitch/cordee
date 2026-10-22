@@ -13,7 +13,7 @@ const MAX_PLAYERS = 8;
 const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4', '#f43f5e', '#94a3b8'];
 const ROLES = ['mage', 'archer'];
 // Apparences proposées dans le salon (le dessin est fait par le navigateur)
-const SKINS = ['classic', 'knight', 'ninja', 'robot', 'ghost', 'cat', 'astro', 'pirate', 'wizard', 'dino', 'pumpkin', 'frog'];
+const SKINS = ['classic', 'knight', 'ninja', 'robot', 'ghost', 'cat', 'astro', 'pirate', 'wizard', 'dino', 'pumpkin', 'frog', 'cookie'];
 const FOREVER = 1e12;
 
 const app = express();
