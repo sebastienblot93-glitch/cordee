@@ -75,6 +75,40 @@
     #hud-keys { color: var(--sun); }
     #canvas { cursor: crosshair; }
     #level-hint { color: var(--chalk); font-size: 1rem; }
+
+    /* Choix du skin */
+    .look-wrap { display: flex; gap: 1rem; align-items: flex-start; }
+    #look-preview { flex: none; width: 108px; height: 126px; background: var(--night); border-radius: 6px; }
+    .look-pick { flex: 1; min-width: 0; }
+    .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: .4rem; }
+    button.skin-btn { padding: 2px; background: var(--night); border: 2px solid #3a3a7a; line-height: 0; }
+    button.skin-btn.on { border-color: var(--sun); background: #2c2c6e; }
+    button.skin-btn canvas { width: 100%; height: auto; }
+    .color-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; }
+    button.swatch { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
+    button.swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--night); }
+    button.swatch.taken { opacity: .25; cursor: not-allowed; }
+    ul.players canvas { width: 20px; height: 26px; flex: none; image-rendering: auto; background: none; border-radius: 0; }
+    .mute-btn { padding: .25rem .6rem; font-size: .7rem; }
+
+    /* Carte de chapitre */
+    #chapter-card {
+      position: absolute; left: 50%; top: 14%; transform: translateX(-50%); width: min(520px, 86%);
+      padding: 1rem 1.4rem; text-align: center; pointer-events: none; opacity: 0;
+      background: rgba(13, 13, 38, .86); border: 2px solid var(--sun); border-radius: 8px;
+    }
+    #chapter-card.show { animation: chapterIn 5.2s ease both; }
+    #chapter-card .num { font-family: 'Silkscreen', monospace; color: var(--muted); font-size: .85rem; }
+    #chapter-card .name { font-family: 'Silkscreen', monospace; color: var(--sun); font-size: clamp(1.3rem, 4vw, 2rem); margin: .2rem 0 .4rem; }
+    #chapter-card .blurb { font-size: .95rem; margin: 0; }
+    #chapter-card ul { list-style: none; padding: 0; margin: .6rem 0 0; color: #9be564; font-size: .85rem; }
+    @keyframes chapterIn {
+      0% { opacity: 0; transform: translate(-50%, -12px); }
+      8% { opacity: 1; transform: translate(-50%, 0); }
+      85% { opacity: 1; transform: translate(-50%, 0); }
+      100% { opacity: 0; transform: translate(-50%, -8px); }
+    }
+    @media (prefers-reduced-motion: reduce) { #chapter-card.show { animation: none; opacity: 1; } }
   </style>
 </head>
 <body>
@@ -86,6 +120,13 @@
       <div class="panel">
         <label for="name">Ton pseudo</label>
         <input id="name" maxlength="12" placeholder="Joueur" autocomplete="off">
+      </div>
+      <div class="panel">
+        <label>Ton personnage</label>
+        <div class="look-wrap">
+          <canvas id="look-preview" width="108" height="126"></canvas>
+          <div id="look-menu" class="look-pick"></div>
+        </div>
       </div>
       <div class="panel">
         <button id="btn-create" class="full">Créer une room privée</button>
@@ -109,6 +150,10 @@
       <h2>Joueurs</h2>
       <ul id="lobby-players" class="players"></ul>
       <div class="panel">
+        <label>Ton personnage</label>
+        <div id="look-lobby" class="look-pick"></div>
+      </div>
+      <div class="panel">
         <label for="role-select">Ton rôle (niveaux Arcanes)</label>
         <select id="role-select">
           <option value="mage">Mage : orbes, glace, lumière</option>
@@ -126,17 +171,26 @@
   </main>
 
   <section id="screen-game" class="screen" style="width:min(960px,96vw)">
-    <div id="hud"><span id="hud-level"></span><span id="hud-keys"></span><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span></div>
+    <div id="hud"><span id="hud-level"></span><span id="hud-keys"></span><span style="display:flex;gap:.7rem;align-items:center"><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span><button id="btn-mute" class="ghost mute-btn" type="button">Son</button></span></div>
     <div id="game-wrap">
       <canvas id="canvas"></canvas>
       <div id="banner">Niveau réussi !</div>
+      <div id="chapter-card">
+        <div id="chapter-num" class="num"></div>
+        <div id="chapter-name" class="name"></div>
+        <p id="chapter-blurb" class="blurb"></p>
+        <ul id="chapter-powers"></ul>
+      </div>
     </div>
     <p id="level-hint" class="hint"></p>
     <p id="role-hint" class="hint"></p>
-    <p class="hint">R recommence le niveau, N passe au suivant (chef de room).</p>
+    <p class="hint">R recommence le niveau, N passe au suivant (chef de room), M coupe le son.</p>
   </section>
 
   <script src="/physics.js"></script>
+  <script src="audio.js"></script>
+  <script src="skins.js"></script>
+  <script src="themes.js"></script>
   <script src="client.js"></script>
 </body>
 </html>
