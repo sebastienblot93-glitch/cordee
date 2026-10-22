@@ -359,6 +359,7 @@ function startMsg(room) {
     total: LEVELS.length,
     name: def.name,
     hint: def.hint,
+    timer: def.timer || 0, // secondes (0 = pas de minuteur)
     chapter: chapterInfo(room.levelIndex),
     cfg: {
       abilities: !!def.abilities,
@@ -377,6 +378,8 @@ function freshRoomState(room, index) {
   room.level = parseLevel(def);
   room.keysTaken = new Set();
   room.time = 0;
+  room.clock = 0; // images écoulées depuis le début du niveau (compte seulement pendant le jeu)
+  room.limit = (def.timer || 0) * 60; // limite de temps en images (60 par seconde)
   room.projectiles = [];
   room.ice = [];
   room.cps = new Set();
@@ -449,6 +452,7 @@ function stateMsg(room, list) {
       cdRatio(p.cd[2], SPELL.cdSwap),
     ]),
     deaths: room.deaths,
+    tl: room.limit ? Math.max(0, Math.ceil((room.limit - room.clock) / 60)) : 0, // secondes restantes
   };
 }
 
@@ -483,7 +487,14 @@ function tick(room) {
   room.time++;
 
   if (room.status === 'playing') {
+    if (room.limit) room.clock++;
     if (doorOpen(room) && allInDoor(room, list)) finishLevel(room);
+    else if (room.limit && room.clock >= room.limit) {
+      room.status = 'timeup'; // temps écoulé : on laisse lire le message puis le niveau redémarre
+      room.timer = 180; // 3 secondes
+    }
+  } else if (room.status === 'timeup') {
+    if (--room.timer <= 0) return loadLevel(room, room.levelIndex);
   } else if (room.status === 'won') {
     if (--room.timer <= 0) return loadLevel(room, room.levelIndex + 1);
   } else if (room.status === 'finished') {

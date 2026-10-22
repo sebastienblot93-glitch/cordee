@@ -17,8 +17,8 @@
 //   shutters  : {1: {period, open, phase}} -> rythme des volets
 //   sequence  : {group, order, timeout} -> cristaux à toucher dans l'ordre
 //   labels    : indices peints dans le décor
-//   fire      : true  -> l'Archer dispose de la flèche de feu (clic droit / K)
-//   swap      : true  -> le Mage dispose de l'éclair d'échange (touche E)
+//   fire      : true  -> l'Archer dispose de la flèche de feu (bouton Feu / clic droit / K)
+//   swap      : true  -> le Mage dispose de l'éclair d'échange (bouton Échange / touche E)
 //
 // Repères de saut : seul, on monte de 2 cases. À deux (l'un sur la tête de l'autre) de 3 cases.
 // L'Archer, avec son double saut, monte de 5 cases et franchit environ 15 cases de vide avec le dash.
@@ -61,7 +61,7 @@ const LEVELS = [
 
 
   /* ===== Chapitre 2 : Arcanes, un Mage et un Archer ===== */
-  make('L’étincelle', 'Le Mage lance une orbe sur le cristal (clic gauche). L’Archer, lui, saute deux fois pour atteindre la clé.', ({ rect, put }) => {
+  make('L’étincelle', 'Le Mage choisit l’Orbe (bouton sous le jeu), puis clique sur le cristal pour le toucher. L’Archer, lui, saute deux fois pour atteindre la clé.', ({ rect, put }) => {
     rect(11, 5, 1, 9, 'a'); // grande porte, ouverte quelques secondes par le cristal
     put(8, 9, 'x');
     rect(15, 10, 3, 1); // corniche à 4 cases : seul l'Archer l'atteint
@@ -81,7 +81,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, hold: { 1: 0, 2: 0 } }),
 
-  make('Le gouffre', 'Un gouffre trop large pour sauter. Le Mage pose de la glace sur les runes (clic droit) ; seul l’Archer atteint la clé.', ({ rect, put }) => {
+  make('Le gouffre', 'Un gouffre trop large pour sauter. Le Mage choisit la Glace (bouton sous le jeu) et clique sur les runes ; seul l’Archer atteint la clé.', ({ rect, put }) => {
     rect(6, 14, 18, 1, '^'); // fond du gouffre : pics (18 cases, même l'Archer ne passe pas seul)
     put(10, 13, 'r');
     put(15, 13, 'r');
@@ -92,7 +92,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true }),
 
-  make('L’escalier de glace', 'Le Mage bâtit un escalier de glace (clic droit) pour atteindre la clé tout en haut. L’Archer tire sur la cible en haut à droite pour ouvrir la porte de sortie.', ({ rect, put }) => {
+  make('L’escalier de glace', 'Le Mage bâtit un escalier de glace (bouton Glace, puis clic sur les runes) pour atteindre la clé tout en haut. L’Archer tire sur la cible en haut à droite pour ouvrir la porte de sortie.', ({ rect, put }) => {
     put(7, 12, 'r');
     put(10, 10, 'r');
     put(13, 8, 'r');
@@ -253,7 +253,7 @@ const LEVELS = [
   }, { abilities: true, hold: { 1: 0 }, sequence: { group: 3, order: [1, 0, 2], timeout: 1200 }, labels: [{ tx: 1, ty: 10, shapes: [1, 0, 2], role: 'archer', radius: 130 }] }),
 
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
-  make('Premier feu', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (clic droit ou K). Le Mage touche le cristal, puis l’Archer allume la torche.', ({ rect, put }) => {
+  make('Premier feu', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Le Mage touche le cristal, puis l’Archer allume la torche.', ({ rect, put }) => {
     rect(10, 1, 2, 13, 't'); // mur de bois : tout le bois relié brûle
     put(14, 5, 'x');
     put(15, 13, 'K');
@@ -314,7 +314,7 @@ const LEVELS = [
   }, { abilities: true, fire: true, and: [1], latch: { 1: 400 }, hold: { 1: 500 } }),
 
   /* ===== Chapitre 7 : Les Brumes (échange) ===== */
-  make('Échange', 'L’Archer franchit le gouffre en dash. Visez-le avec l’éclair d’échange (touche E) : le Mage prend sa place de l’autre côté ! Puis le Mage touche le cristal.', ({ rect, put }) => {
+  make('Échange', 'L’Archer franchit le gouffre en dash. Visez-le avec l’éclair d’échange (bouton Échange, puis clic sur l’Archer) : le Mage prend sa place de l’autre côté ! Puis le Mage touche le cristal.', ({ rect, put }) => {
     rect(6, 14, 12, 1, '^');
     put(21, 10, 'x');
     put(22, 13, 'K');
@@ -336,7 +336,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, swap: true, hold: { 1: 900 } }),
 
-  make('Brouillard', 'Dans le noir, l’Archer passe le gouffre, le Mage le rejoint par l’échange (E), puis le bois brûle. Le Mage touche le cristal derrière le mur.', ({ rect, put }) => {
+  make('Brouillard', 'Dans le noir, l’Archer passe le gouffre, le Mage le rejoint par l’échange (bouton Échange), puis le bois brûle. Le Mage touche le cristal derrière le mur.', ({ rect, put }) => {
     rect(6, 14, 12, 1, '^');
     put(18, 13, 'C');
     rect(21, 1, 2, 13, 't');
@@ -375,13 +375,27 @@ const CHAPTERS = [
   { name: 'Les Ténèbres', theme: 'dark', count: 2, blurb: 'Le noir est total. Seule la lumière du Mage montre le chemin.' },
   { name: 'Le Sanctuaire', theme: 'sanctuary', count: 4, blurb: 'Précision, timing, ordre des cristaux : le temple teste votre synchronisation.' },
   { name: 'Les Jardins suspendus', theme: 'garden', count: 4, blurb: 'Des ressorts jaillissent des fleurs. Attention aux pics en bas !', powers: ['Ressort : retombez dessus pour être propulsé à 6 cases'] },
-  { name: 'La Forge', theme: 'forge', count: 4, blurb: 'Le bois brûle, les torches s’allument. Mais attention : le feu se propage à tout le bois relié.', powers: ['Archer : clic droit ou K, flèche de feu (brûle le bois, allume les torches)'] },
-  { name: 'Les Brumes', theme: 'mist', count: 4, blurb: 'Le brouillard efface les distances. Il faudra échanger vos places.', powers: ['Mage : touche E, éclair d’échange (prend la place du premier joueur touché)'] },
+  { name: 'La Forge', theme: 'forge', count: 4, blurb: 'Le bois brûle, les torches s’allument. Mais attention : le feu se propage à tout le bois relié.', powers: ['Archer : bouton Feu, puis clic dans le jeu (brûle le bois, allume les torches)'] },
+  { name: 'Les Brumes', theme: 'mist', count: 4, blurb: 'Le brouillard efface les distances. Il faudra échanger vos places.', powers: ['Mage : bouton Échange, puis clic sur l’autre joueur (vous échangez vos places)'] },
 ];
 
 let _c = 0;
 CHAPTERS.forEach((ch, i) => {
   for (let k = 0; k < ch.count; k++) LEVELS[_c++].chapter = i;
 });
+
+// Minuteur (en secondes) : seulement sur le dernier niveau de chaque chapitre.
+// Si le temps est écoulé, le niveau redémarre. Pour changer une durée ou en ajouter une,
+// modifiez simplement ce tableau (nom du niveau : secondes). 0 ou absent = pas de minuteur.
+const TIMERS = {
+  'Le mur': 50, // chapitre 1
+  'L’escalier de glace': 60, // chapitre 2
+  'Le va-et-vient': 60, // chapitre 3
+  'Synchro': 80, // chapitre 4
+  'Jardin secret': 80, // chapitre 5
+  'Brasier': 90, // chapitre 6
+  'Cordée': 120, // chapitre 7
+};
+LEVELS.forEach((l) => { l.timer = TIMERS[l.name] || 0; });
 
 module.exports = { LEVELS, CHAPTERS };
