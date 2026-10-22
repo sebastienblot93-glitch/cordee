@@ -15,13 +15,22 @@
       --muted: #a9a8cf;
       --sun: #ffd24a;
       --danger: #ff6b6b;
+      --accent: #ffd24a;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; min-height: 100vh; display: grid; place-items: center;
       background: var(--night); color: var(--chalk);
       font-family: 'Nunito', system-ui, sans-serif; font-size: 18px;
+      transition: background-color .8s;
     }
+    body[data-theme=prairie] { background: #173524; }
+    body[data-theme=arcane] { background: #1d1846; }
+    body[data-theme=dark] { background: #08080f; }
+    body[data-theme=sanctuary] { background: #352a16; }
+    body[data-theme=garden] { background: #153a35; }
+    body[data-theme=forge] { background: #2c1109; }
+    body[data-theme=mist] { background: #1b2a3a; }
     h1, h2, button, .code { font-family: 'Silkscreen', 'Courier New', monospace; }
     h1 { font-size: clamp(2.2rem, 8vw, 4rem); margin: 0 0 .25rem; letter-spacing: .02em; }
     h2 { font-size: 1.1rem; margin: 0 0 1rem; font-weight: 400; color: var(--muted); }
@@ -54,14 +63,15 @@
     .dot { width: 18px; height: 22px; border-radius: 3px; flex: none; }
     .tag { color: var(--muted); font-size: .85rem; }
 
-    #game-wrap { position: relative; width: min(960px, 96vw); }
+    #game-wrap { position: relative; width: min(960px, 96vw); border-radius: 8px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px -4px var(--accent); transition: box-shadow .8s; }
     canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: pixelated; }
     #banner {
       position: absolute; inset: 0; display: none; place-items: center; text-align: center;
-      font-family: 'Silkscreen', monospace; font-size: clamp(1.4rem, 5vw, 3rem); color: var(--sun);
-      background: rgba(13, 13, 38, .6);
+      font-family: 'Silkscreen', monospace; font-size: clamp(1.4rem, 5vw, 3rem); color: var(--accent);
+      background: rgba(13, 13, 38, .6); white-space: pre-line; line-height: 1.4;
     }
     #banner.show { display: grid; }
+    #banner.bad { color: var(--danger); background: rgba(40, 8, 12, .72); }
     .hint { color: var(--muted); font-size: .9rem; margin-top: .6rem; text-align: center; }
     select {
       width: 100%; padding: .7rem .8rem; font: inherit; color: var(--chalk);
@@ -72,7 +82,11 @@
       display: flex; justify-content: space-between; gap: 1rem; margin-bottom: .5rem;
       font-family: 'Silkscreen', 'Courier New', monospace; font-size: 1rem; color: var(--chalk);
     }
-    #hud-keys { color: var(--sun); }
+    #hud-keys { color: var(--accent); }
+    #hud-timer { color: var(--chalk); min-width: 4.5em; text-align: center; }
+    #hud-timer.warn { color: #ffb040; }
+    #hud-timer.urgent { color: var(--danger); animation: blink .5s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: .35; } }
     #canvas { cursor: crosshair; }
     #level-hint { color: var(--chalk); font-size: 1rem; }
 
@@ -90,16 +104,51 @@
     button.swatch.taken { opacity: .25; cursor: not-allowed; }
     ul.players canvas { width: 20px; height: 26px; flex: none; image-rendering: auto; background: none; border-radius: 0; }
     .mute-btn { padding: .25rem .6rem; font-size: .7rem; }
+    #audio-ctl { position: fixed; top: 8px; right: 8px; z-index: 20; display: flex; gap: .4rem; }
+    #audio-ctl button { background: rgba(22, 22, 58, .85); }
+
+    /* Barre des sorts : cliquable, pour ne pas avoir à retenir les touches */
+    #actionbar { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; margin-top: .7rem; }
+    #actionbar:empty { display: none; }
+    button.act {
+      position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 2px;
+      min-width: 128px; padding: .55rem .9rem .5rem; background: var(--night-2); color: var(--chalk);
+      border: 3px solid var(--c, #4a4a8a); border-radius: 8px; line-height: 1.15;
+    }
+    button.act b { font-family: 'Silkscreen', monospace; font-size: .95rem; color: var(--c, var(--chalk)); position: relative; z-index: 1; }
+    button.act small { font-size: .72rem; color: var(--muted); position: relative; z-index: 1; }
+    button.act i { position: absolute; inset: 0; background: rgba(13, 13, 38, .72); transform-origin: left; transform: scaleX(var(--cd, 0)); }
+    button.act.armed { background: #34347e; box-shadow: 0 0 0 3px var(--c, var(--accent)), 0 0 14px var(--c, var(--accent)); }
+    button.act.armed small { color: var(--chalk); }
+    #move-help { margin: .5rem 0 0; }
+    .hint kbd, #help kbd {
+      font-family: 'Silkscreen', monospace; font-size: .75rem; padding: 1px 6px; border-radius: 4px;
+      background: var(--night-2); border: 1px solid #4a4a8a; color: var(--chalk);
+    }
+    #btn-help { padding: .3rem .8rem; font-size: .75rem; margin-left: .5rem; }
+    #help {
+      position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(8, 8, 24, .82); padding: 1rem;
+    }
+    #help.show { display: grid; }
+    #help .card {
+      width: min(620px, 100%); max-height: 92vh; overflow: auto; background: var(--night-2);
+      border: 3px solid var(--accent); border-radius: 10px; padding: 1.2rem 1.5rem; font-size: 1rem; line-height: 1.5;
+    }
+    #help h3 { font-family: 'Silkscreen', monospace; color: var(--accent); margin: 0 0 .6rem; font-size: 1.3rem; font-weight: 400; }
+    #help h4 { margin: 1rem 0 .3rem; font-size: 1rem; color: var(--muted); font-weight: 700; }
+    #help ul { margin: 0; padding-left: 1.2rem; }
+    #help li { margin: .25rem 0; }
+    #help .close { margin-top: 1rem; width: 100%; }
 
     /* Carte de chapitre */
     #chapter-card {
       position: absolute; left: 50%; top: 14%; transform: translateX(-50%); width: min(520px, 86%);
       padding: 1rem 1.4rem; text-align: center; pointer-events: none; opacity: 0;
-      background: rgba(13, 13, 38, .86); border: 2px solid var(--sun); border-radius: 8px;
+      background: rgba(13, 13, 38, .86); border: 2px solid var(--accent); border-radius: 8px;
     }
     #chapter-card.show { animation: chapterIn 5.2s ease both; }
     #chapter-card .num { font-family: 'Silkscreen', monospace; color: var(--muted); font-size: .85rem; }
-    #chapter-card .name { font-family: 'Silkscreen', monospace; color: var(--sun); font-size: clamp(1.3rem, 4vw, 2rem); margin: .2rem 0 .4rem; }
+    #chapter-card .name { font-family: 'Silkscreen', monospace; color: var(--accent); font-size: clamp(1.3rem, 4vw, 2rem); margin: .2rem 0 .4rem; }
     #chapter-card .blurb { font-size: .95rem; margin: 0; }
     #chapter-card ul { list-style: none; padding: 0; margin: .6rem 0 0; color: #9be564; font-size: .85rem; }
     @keyframes chapterIn {
@@ -172,7 +221,7 @@
   </main>
 
   <section id="screen-game" class="screen" style="width:min(960px,96vw)">
-    <div id="hud"><span id="hud-level"></span><span id="hud-keys"></span><span style="display:flex;gap:.7rem;align-items:center"><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span><button id="btn-mute" class="ghost mute-btn" type="button">Son</button></span></div>
+    <div id="hud"><span id="hud-level"></span><span id="hud-timer"></span><span id="hud-keys"></span><span style="display:flex;gap:.7rem;align-items:center"><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span></span></div>
     <div id="game-wrap">
       <canvas id="canvas"></canvas>
       <div id="banner">Niveau réussi !</div>
@@ -184,9 +233,23 @@
       </div>
     </div>
     <p id="level-hint" class="hint"></p>
-    <p id="role-hint" class="hint"></p>
-    <p class="hint">R recommence le niveau, N passe au suivant (chef de room), M coupe le son.</p>
+    <div id="actionbar"></div>
+    <p id="move-help" class="hint"></p>
+    <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>M</kbd> coupe le son<button id="btn-help" class="ghost" type="button">Aide (H)</button></p>
   </section>
+
+  <div id="audio-ctl">
+    <button id="btn-music" class="ghost mute-btn" type="button">Musique</button>
+    <button id="btn-mute" class="ghost mute-btn" type="button">Son</button>
+  </div>
+
+  <div id="help" role="dialog" aria-label="Aide">
+    <div class="card">
+      <h3>Comment jouer</h3>
+      <div id="help-body"></div>
+      <button id="help-close" class="close" type="button">Compris, on joue !</button>
+    </div>
+  </div>
 
   <script src="/physics.js"></script>
   <script src="audio.js"></script>
