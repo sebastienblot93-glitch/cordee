@@ -19,7 +19,47 @@ const FOREVER = 1e12;
 const app = express();
 // Le navigateur réutilise la même physique que le serveur (pour afficher la trajectoire des tirs)
 app.get('/physics.js', (req, res) => res.sendFile(path.join(__dirname, 'physics.js')));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// Version du jeu : visible sur /diag pour vérifier que la mise à jour est bien en ligne
+const BUILD = 'v2 - 24 niveaux, skins, sons';
+const fs = require('fs');
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const WEB_FILES = ['index.html', 'client.js', 'audio.js', 'skins.js', 'themes.js'];
+
+// Pas de cache : le navigateur recharge toujours la dernière version du jeu
+app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
+  next();
+});
+
+// Si un fichier du site a été envoyé par erreur à la racine du dépôt (au lieu de public/),
+// on sert quand même cette copie : c'est la plus récente.
+app.get(['/', '/index.html', '/client.js', '/audio.js', '/skins.js', '/themes.js'], (req, res, next) => {
+  const name = req.path === '/' ? 'index.html' : req.path.slice(1);
+  const rootCopy = path.join(__dirname, name);
+  if (fs.existsSync(rootCopy)) return res.sendFile(rootCopy);
+  next();
+});
+
+// Page de diagnostic : ouvrez /diag dans le navigateur
+app.get('/diag', (req, res) => {
+  const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
+  const lines = [
+    'Cordée - ' + BUILD,
+    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 24)',
+    'Chapitres : ' + CHAPTERS.length + ' (attendu : 7)',
+    '',
+    'Fichiers dans public/ :',
+    ...WEB_FILES.map((f) => '  ' + f + ' : ' + size(path.join(PUBLIC_DIR, f))),
+    '',
+    'Fichiers envoyés par erreur à la racine (ils sont servis quand même) :',
+    ...WEB_FILES.map((f) => '  ' + f + ' : ' + (fs.existsSync(path.join(__dirname, f)) ? 'présent' : 'absent')),
+  ];
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.end(lines.join('\n'));
+});
+
+app.use(express.static(PUBLIC_DIR));
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
