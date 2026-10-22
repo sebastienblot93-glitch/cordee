@@ -9,8 +9,8 @@
   try { muted = localStorage.getItem('cordee.muted') === '1'; } catch { /* stockage indisponible */ }
   try { musicOn = localStorage.getItem('cordee.music') !== '0'; } catch { /* stockage indisponible */ }
 
-  const MASTER_VOL = 0.16;
-  const MUSIC_VOL = 0.21;
+  const MASTER_VOL = 0.13;
+  const MUSIC_VOL = 0.15;
 
   function ctx() {
     if (ac) return ac;
@@ -354,8 +354,9 @@
     },
     toggle() { return this.setMuted(!muted); },
     // Musique : 'menu' ou le nom d'un thème de chapitre ; null pour arrêter
-    music(name) {
-      mus.want = name;
+    // silent = true : on garde le style du chapitre (bruit de saut) mais on ne joue pas la musique intégrée
+    music(name, silent) {
+      mus.want = silent ? null : name;
       if (JUMP_WAVE[name]) jumpWave = JUMP_WAVE[name];
       if (ac) { try { ensureMusic(); } catch { /* ignore */ } }
     },

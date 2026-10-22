@@ -121,6 +121,12 @@
     button.act.armed { background: #34347e; box-shadow: 0 0 0 3px var(--c, var(--accent)), 0 0 14px var(--c, var(--accent)); }
     button.act.armed small { color: var(--chalk); }
     #move-help { margin: .5rem 0 0; }
+    #under { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+    #under-main { flex: 1; min-width: min(100%, 420px); }
+    #yt-wrap { display: none; flex: none; width: 200px; margin: .6rem auto 0; text-align: center; }
+    #yt-wrap.show { display: block; }
+    #yt-wrap iframe, #yt-wrap audio { width: 200px; height: 200px; border: 0; border-radius: 8px; background: #000; display: block; }
+    #yt-title { font-size: .7rem; margin-top: .2rem; }
     .hint kbd, #help kbd {
       font-family: 'Silkscreen', monospace; font-size: .75rem; padding: 1px 6px; border-radius: 4px;
       background: var(--night-2); border: 1px solid #4a4a8a; color: var(--chalk);
@@ -232,10 +238,18 @@
         <ul id="chapter-powers"></ul>
       </div>
     </div>
-    <p id="level-hint" class="hint"></p>
-    <div id="actionbar"></div>
-    <p id="move-help" class="hint"></p>
-    <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>M</kbd> coupe le son<button id="btn-help" class="ghost" type="button">Aide (H)</button></p>
+    <div id="under">
+      <div id="under-main">
+        <p id="level-hint" class="hint"></p>
+        <div id="actionbar"></div>
+        <p id="move-help" class="hint"></p>
+        <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>M</kbd> coupe le son<button id="btn-help" class="ghost" type="button">Aide (H)</button></p>
+      </div>
+      <div id="yt-wrap">
+        <div id="yt-player"></div>
+        <div id="yt-title" class="hint"></div>
+      </div>
+    </div>
   </section>
 
   <div id="audio-ctl">

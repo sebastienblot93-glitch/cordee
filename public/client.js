@@ -62,6 +62,129 @@ function saveLook() {
   try { localStorage.setItem('cordee.look', JSON.stringify(look)); } catch { /* ignore */ }
 }
 
+/* ---------- Musiques personnalisées par chapitre ---------- */
+// Pour donner une musique à un chapitre, ajoutez une ligne : nom du thème -> lecteur YouTube ou fichier mp3.
+//   { yt: 'IDENTIFIANT_DE_LA_VIDEO', title: 'Titre affiché' }   (lecteur officiel YouTube, visible sous le jeu)
+//   { src: 'music/mon-fichier.mp3', title: 'Titre affiché' }    (fichier à déposer dans public/music/)
+// Thèmes : prairie, arcane, dark, sanctuary, garden, forge, mist. Sans ligne, le chapitre garde sa musique intégrée.
+const CUSTOM_TRACKS = {
+  prairie: { yt: 'oIUveqb6kSA', title: 'Indila x BENNETT · Dernière Danse (Techno Mix)' },
+};
+const CUSTOM_VOLUME = 15; // 0 à 100 : volume de ces musiques (bas, pour ne pas couvrir les bruitages)
+
+const Custom = {
+  name: null, // thème dont la musique personnalisée joue en ce moment
+  player: null, // lecteur YouTube
+  ready: false,
+  apiAsked: false,
+  audio: null, // lecteur mp3
+  rate: 1,
+  failed: new Set(), // thèmes pour lesquels la musique personnalisée n'a pas pu démarrer (on garde la musique intégrée)
+
+  shouldPlay() { return !!this.name && !window.Sfx.isMuted() && window.Sfx.musicEnabled(); },
+
+  // Joue ou met en pause selon les boutons Son / Musique
+  sync() {
+    const play = this.shouldPlay();
+    try {
+      if (this.audio) { this.audio.volume = CUSTOM_VOLUME / 100; if (play) this.audio.play().catch(() => {}); else this.audio.pause(); }
+      if (this.player && this.ready && this.player.playVideo) {
+        this.player.setVolume(CUSTOM_VOLUME);
+        if (play) this.player.playVideo(); else this.player.pauseVideo();
+      }
+    } catch { /* lecteur indisponible : sans importance */ }
+  },
+
+  setRate(x, force) {
+    if (x === this.rate && !force) return; // pas d'appel inutile à chaque mise à jour
+    this.rate = x;
+    try {
+      if (this.audio) this.audio.playbackRate = x;
+      if (this.player && this.ready && this.player.setPlaybackRate) this.player.setPlaybackRate(x);
+    } catch { /* ignore */ }
+  },
+
+  fail(name) {
+    this.failed.add(name);
+    if (this.name === name) {
+      this.stop();
+      window.Sfx.music(name); // retour à la musique intégrée du chapitre
+    }
+  },
+
+  loadApi(cb) {
+    if (window.YT && window.YT.Player) return cb();
+    window.onYouTubeIframeAPIReady = cb;
+    if (this.apiAsked) return;
+    this.apiAsked = true;
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api';
+    s.onerror = () => { window.onYouTubeIframeAPIReady = null; this.apiAsked = false; if (this.name) this.fail(this.name); };
+    document.head.append(s);
+  },
+
+  start(name, t) {
+    if (this.name === name) { this.sync(); return; }
+    this.stop();
+    this.name = name;
+    $('yt-title').textContent = `♪ ${t.title || ''}`;
+    $('yt-wrap').classList.add('show');
+    if (t.src) {
+      if (!this.audio) { this.audio = new Audio(); this.audio.loop = true; }
+      this.audio.src = t.src;
+      this.audio.onerror = () => this.fail(name);
+      this.audio.playbackRate = this.rate;
+      this.sync();
+      return;
+    }
+    // lecteur YouTube : s'il ne répond pas au bout de 10 s (réseau bloqué, vidéo non intégrable…), on garde la musique intégrée
+    clearTimeout(this.guard);
+    this.guard = setTimeout(() => { if (this.name === name && !this.ready) this.fail(name); }, 10000);
+    const make = () => {
+      if (this.name !== name) return;
+      if (this.player) {
+        try { this.player.loadVideoById(t.yt); this.ready = true; this.sync(); } catch { this.fail(name); }
+        return;
+      }
+      this.player = new window.YT.Player('yt-player', {
+        width: 200, height: 200, videoId: t.yt,
+        playerVars: { autoplay: 1, controls: 1, loop: 1, playlist: t.yt, rel: 0, playsinline: 1, modestbranding: 1 },
+        events: {
+          onReady: () => { this.ready = true; clearTimeout(this.guard); this.player.setVolume(CUSTOM_VOLUME); this.setRate(this.rate, true); this.sync(); },
+          onError: () => this.fail(this.name || name),
+        },
+      });
+    };
+    this.loadApi(make);
+  },
+
+  stop() {
+    this.name = null;
+    clearTimeout(this.guard);
+    $('yt-wrap').classList.remove('show');
+    try {
+      if (this.audio) this.audio.pause();
+      if (this.player && this.ready && this.player.pauseVideo) this.player.pauseVideo();
+    } catch { /* ignore */ }
+  },
+};
+
+// Choisit la musique : celle du chapitre si elle est personnalisée, sinon la musique intégrée
+function setMusicFor(name) {
+  const t = CUSTOM_TRACKS[name];
+  if (t && !Custom.failed.has(name)) {
+    window.Sfx.music(name, true); // garde seulement le style sonore du chapitre
+    Custom.start(name, t);
+  } else {
+    Custom.stop();
+    window.Sfx.music(name);
+  }
+}
+function setTempo(x) {
+  window.Sfx.musicTempo(x);
+  Custom.setRate(x);
+}
+
 function freshWorld(lv) {
   return {
     status: 'playing', keys: [], open: [], pressed: [], door: lv.keys.length === 0,
@@ -77,8 +200,8 @@ function show(name) {
   if (name !== 'game') {
     document.body.removeAttribute('data-theme');
     document.documentElement.style.removeProperty('--accent');
-    window.Sfx.music('menu');
-    window.Sfx.musicTempo(1);
+    setMusicFor('menu');
+    setTempo(1);
   }
 }
 
@@ -394,8 +517,8 @@ function startLevel(msg) {
   show('game');
   document.body.dataset.theme = level.theme;
   document.documentElement.style.setProperty('--accent', ACCENT[level.theme] || '#ffd24a');
-  window.Sfx.music(level.theme);
-  window.Sfx.musicTempo(1);
+  setMusicFor(level.theme);
+  setTempo(1);
   if (level.cfg.abilities && !helpSeen()) showHelp();
   if (chapter.index !== lastChapter) {
     lastChapter = chapter.index;
@@ -468,7 +591,7 @@ function updateTimer() {
     if (playing && tl <= 10 && tl > 0) window.Sfx.play('tick', 300);
   }
   // la musique accélère pendant les 30 dernières secondes
-  window.Sfx.musicTempo(playing && tl > 0 && tl <= 30 ? 1.22 : 1);
+  setTempo(playing && tl > 0 && tl <= 30 ? 1.22 : 1);
 }
 
 /* ---------- Barre des sorts et aide ---------- */
@@ -757,6 +880,7 @@ $('btn-copy').onclick = async () => {
 function updateMuteButton() {
   $('btn-mute').textContent = window.Sfx.isMuted() ? 'Son : coupé (M)' : 'Son : activé (M)';
   $('btn-music').textContent = window.Sfx.musicEnabled() ? 'Musique : oui' : 'Musique : non';
+  Custom.sync();
 }
 $('btn-mute').onclick = () => { window.Sfx.toggle(); updateMuteButton(); window.Sfx.play('click'); };
 $('btn-music').onclick = () => { window.Sfx.toggleMusic(); updateMuteButton(); window.Sfx.play('click'); };
@@ -815,7 +939,7 @@ function cast(slot) {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyM' && !e.repeat && document.activeElement && document.activeElement.tagName !== 'INPUT') {
+  if (e.key && e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) {
     window.Sfx.toggle();
     updateMuteButton();
     return;
@@ -1551,5 +1675,5 @@ function draw() {
 }
 
 refreshPickers();
-window.Sfx.music('menu');
+setMusicFor('menu');
 draw();
