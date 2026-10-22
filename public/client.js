@@ -13,6 +13,21 @@ const ROLE_LABEL = { mage: 'Mage', archer: 'Archer' };
 const LIGHT_MAGE = 100; // rayon de la lumière du Mage dans les niveaux sombres
 const LIGHT_SELF = 44; // rayon de la lueur de chaque joueur
 const LIGHT_TORCH = 92; // rayon d'une torche allumée
+// Couleur d'ambiance de chaque chapitre (cadre, titres, boutons)
+const ACCENT = { prairie: '#9be564', arcane: '#b79cff', dark: '#8aa0ff', sanctuary: '#ffd24a', garden: '#ff9ad0', forge: '#ff8a2a', mist: '#9fe0ee' };
+// Sorts affichés dans la barre sous le jeu (slot 0 = dash)
+const SPELLS = {
+  mage: [
+    { slot: 1, name: 'Orbe', key: 'J', color: '#b79cff', tip: 'Active les cristaux' },
+    { slot: 2, name: 'Glace', key: 'K', color: '#a0e1ff', tip: 'Crée des plateformes sur les runes' },
+    { slot: 3, name: 'Échange', key: 'E', color: '#ff9ad0', tip: 'Échange ta place avec l’autre joueur', need: 'swap' },
+  ],
+  archer: [
+    { slot: 1, name: 'Flèche', key: 'J', color: '#e6c58a', tip: 'Active les cibles' },
+    { slot: 2, name: 'Feu', key: 'K', color: '#ff9a3a', tip: 'Brûle le bois, allume les torches', need: 'fire' },
+    { slot: 0, name: 'Dash', key: 'Maj', color: '#9be564', tip: 'Course éclair', dash: true },
+  ],
+};
 
 let ws;
 let pingTimer = null;
@@ -25,6 +40,9 @@ let chapterList = []; // [{name, theme}]
 let level = null; // { rows, tile, keys, door, index, total, name, hint, cfg, chapter, theme, L, bg, tiles, decor }
 let world = null;
 let lastChapter = -1;
+let armed = 1; // sort choisi : le clic gauche dans le jeu lance ce sort
+let actBtns = []; // boutons de la barre des sorts
+let lastTl = -1;
 let pingRtt = 80;
 const sprites = new Map(); // id -> { x, y, tx, ty, face, vy, ... }
 const mouse = { x: 0, y: 0, has: false };
@@ -48,7 +66,7 @@ function freshWorld(lv) {
   return {
     status: 'playing', keys: [], open: [], pressed: [], door: lv.keys.length === 0,
     cr: [], tg: [], tc: [], bn: [], bt: [], seq: { p: 0, done: false, flash: false }, sh: [], ice: [], proj: [], cps: [], cd: [],
-    deaths: 0, recvAt: performance.now(),
+    deaths: 0, tl: lv.timer || 0, recvAt: performance.now(),
   };
 }
 
@@ -56,6 +74,12 @@ function freshWorld(lv) {
 function show(name) {
   Object.entries(screens).forEach(([k, el]) => el.classList.toggle('active', k === name));
   menuRoot.style.display = name === 'game' ? 'none' : '';
+  if (name !== 'game') {
+    document.body.removeAttribute('data-theme');
+    document.documentElement.style.removeProperty('--accent');
+    window.Sfx.music('menu');
+    window.Sfx.musicTempo(1);
+  }
 }
 
 function setError(msg) {
@@ -273,6 +297,7 @@ function reactToState(prev, msg) {
       burst(e[1], e[2], '#ffffff', 8, 2, 0.02, 18);
     }
   });
+  if (msg.status !== prevWorldInfo.status && msg.status === 'timeup') sfx('timeup');
   if (msg.status !== prevWorldInfo.status && (msg.status === 'won' || msg.status === 'finished')) {
     sfx('win');
     confetti();
@@ -292,7 +317,7 @@ function applyState(msg) {
   world = {
     status: msg.status, keys: msg.keys, open: msg.open, pressed: msg.pressed, door: msg.door,
     cr: msg.cr, tg: msg.tg, tc: msg.tc || [], bn: msg.bn || [], bt: msg.bt || [], seq: msg.seq, sh: msg.sh, ice: msg.ice,
-    proj: msg.proj, cps: msg.cps, cd: msg.cd, deaths: msg.deaths, recvAt: performance.now(),
+    proj: msg.proj, cps: msg.cps, cd: msg.cd, deaths: msg.deaths, tl: msg.tl || 0, recvAt: performance.now(),
   };
   for (const [id, x, y, face] of msg.p) {
     let s = sprites.get(id);
@@ -322,6 +347,7 @@ function applyState(msg) {
   }
   updateBanner();
   updateHud();
+  updateTimer();
 }
 
 function startLevel(msg) {
@@ -339,6 +365,7 @@ function startLevel(msg) {
   const chapter = msg.chapter || { index: 0, name: '', theme: 'arcane', pos: 1, count: 1, powers: [] };
   level = {
     rows: msg.level, tile: T, keys, door, index: msg.index, total: msg.total, name: msg.name, hint: msg.hint, chapter,
+    timer: msg.timer || 0,
     theme: chapter.theme,
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
@@ -357,11 +384,19 @@ function startLevel(msg) {
   level.bg = window.Themes.makeBackground(level.theme, W, H, msg.index + 1);
   level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, msg.index + 1);
   level.decor = window.Themes.makeDecor(level.theme, W, H, msg.index + 1);
-  $('level-hint').textContent = level.hint;
+  $('level-hint').textContent = level.hint + (level.timer ? `  ⏱ Niveau chronométré : ${spokenTime(level.timer)}.` : '');
+  armed = 1;
+  lastTl = -1;
   updateRoleHint();
   updateBanner();
   updateHud();
+  updateTimer();
   show('game');
+  document.body.dataset.theme = level.theme;
+  document.documentElement.style.setProperty('--accent', ACCENT[level.theme] || '#ffd24a');
+  window.Sfx.music(level.theme);
+  window.Sfx.musicTempo(1);
+  if (level.cfg.abilities && !helpSeen()) showHelp();
   if (chapter.index !== lastChapter) {
     lastChapter = chapter.index;
     showChapterCard(chapter);
@@ -390,8 +425,12 @@ function showChapterCard(ch) {
 
 function updateBanner() {
   const finished = world.status === 'finished';
-  $('banner').textContent = finished ? 'Bravo, vous avez terminé tous les niveaux !' : 'Niveau réussi !';
-  $('banner').classList.toggle('show', finished || world.status === 'won');
+  const timeup = world.status === 'timeup';
+  $('banner').textContent = timeup
+    ? 'Temps écoulé !\nOn recommence le niveau…'
+    : finished ? 'Bravo, vous avez terminé tous les niveaux !' : 'Niveau réussi !';
+  $('banner').classList.toggle('bad', timeup);
+  $('banner').classList.toggle('show', finished || timeup || world.status === 'won');
 }
 
 function updateHud() {
@@ -404,16 +443,154 @@ function updateHud() {
   $('hud-keys').textContent = parts2.join('   ');
 }
 
+/* ---------- Minuteur ---------- */
+function fmtTime(sec) {
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+}
+function spokenTime(sec) {
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  return r ? `${m} min ${r} s` : `${m} min`;
+}
+function updateTimer() {
+  const el = $('hud-timer');
+  if (!level || !level.timer || !world) {
+    el.textContent = '';
+    el.className = '';
+    return;
+  }
+  const playing = world.status === 'playing';
+  const tl = world.status === 'timeup' ? 0 : world.tl;
+  el.textContent = `⏱ ${fmtTime(tl)}`;
+  el.className = playing && tl <= 10 ? 'urgent' : playing && tl <= 30 ? 'warn' : '';
+  if (tl !== lastTl) {
+    lastTl = tl;
+    if (playing && tl <= 10 && tl > 0) window.Sfx.play('tick', 300);
+  }
+  // la musique accélère pendant les 30 dernières secondes
+  window.Sfx.musicTempo(playing && tl > 0 && tl <= 30 ? 1.22 : 1);
+}
+
+/* ---------- Barre des sorts et aide ---------- */
+function slotAvailable(slot) {
+  const kit = myKit();
+  if (!level || kit === 'plain') return false;
+  if (slot === 1) return true;
+  if (slot === 2) return kit === 'mage' || !!level.cfg.fire;
+  if (slot === 3) return kit === 'mage' && !!level.cfg.swap;
+  return false;
+}
+
+function refreshArmed() {
+  actBtns.forEach((b) => b.el.classList.toggle('armed', !b.dash && b.slot === armed));
+  canvas.style.cursor = myKit() === 'plain' ? 'default' : 'crosshair';
+}
+
+function armSlot(slot) {
+  if (!slotAvailable(slot)) return;
+  armed = slot;
+  refreshArmed();
+  window.Sfx.play('click', 60);
+}
+
 function updateRoleHint() {
   const kit = myKit();
-  const c = level.cfg;
-  const mage = 'Mage : clic gauche (ou J) lance une orbe qui active les cristaux. Clic droit (ou K) pose de la glace sur les runes.'
-    + (c.swap ? ' E : éclair d’échange, tu changes de place avec le premier joueur touché.' : '');
-  const archer = 'Archer : clic gauche (ou J) tire une flèche qui active les cibles. Saute deux fois, et Maj (ou L) pour un dash.'
-    + (c.fire ? ' Clic droit (ou K) : flèche de feu, elle brûle le bois et allume les torches.' : '');
-  const text = { mage, archer, plain: 'Flèches ou ZQSD pour bouger, espace pour sauter.' }[kit];
-  $('role-hint').textContent = text;
+  const bar = $('actionbar');
+  bar.innerHTML = '';
+  actBtns = [];
+  (SPELLS[kit] || []).forEach((d) => {
+    if (d.need && !level.cfg[d.need]) return;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'act';
+    b.tabIndex = -1; // pas de focus : la barre d'espace doit rester le saut
+    b.style.setProperty('--c', d.color);
+    b.title = d.tip;
+    const name = document.createElement('b');
+    name.textContent = d.name;
+    const tip = document.createElement('small');
+    tip.textContent = d.tip;
+    const key = document.createElement('small');
+    key.textContent = `raccourci : ${d.key}`;
+    const fill = document.createElement('i');
+    b.append(name, tip, key, fill);
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.addEventListener('click', () => {
+      if (d.dash) { send({ t: 'dash' }); window.Sfx.play('click', 60); } else armSlot(d.slot);
+    });
+    bar.append(b);
+    actBtns.push({ el: b, slot: d.slot, dash: !!d.dash, fill });
+  });
+  const move = 'Bouger : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>) · Sauter : <kbd>Espace</kbd>';
+  let extra = '';
+  if (kit === 'archer') extra = ' · Double saut : <kbd>Espace</kbd> deux fois';
+  if (kit !== 'plain') extra += '<br>Pour lancer un sort : clique sur son bouton, puis clique dans le jeu pour viser.';
+  $('move-help').innerHTML = move + extra;
+  refreshArmed();
 }
+
+function updateActionCooldowns() {
+  if (!actBtns.length || !world) return;
+  const cd = world.cd.find((c) => c[0] === myId);
+  const kit = myKit();
+  actBtns.forEach((b) => {
+    let r = 0;
+    if (cd) {
+      if (b.dash) r = cd[3];
+      else if (b.slot === 3) r = cd[4] || 0;
+      else r = cd[b.slot] || 0;
+    }
+    r = Math.round(r * 50) / 50;
+    if (b.last !== r) { b.last = r; b.fill.style.setProperty('--cd', r); b.el.style.setProperty('--cd', r); }
+  });
+  void kit;
+}
+
+function helpSeen() {
+  try { return localStorage.getItem('cordee.helpSeen') === '1'; } catch { return false; }
+}
+
+function helpHtml() {
+  const kit = myKit();
+  const c = level ? level.cfg : {};
+  let h = '<h4>Pour tout le monde</h4><ul>'
+    + '<li>Bouger : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>)</li>'
+    + '<li>Sauter : <kbd>Espace</kbd> (ou <kbd>↑</kbd>)</li>'
+    + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
+    + '<li><kbd>M</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
+  if (kit === 'mage') {
+    h += '<h4>Tu es le Mage</h4><ul>'
+      + '<li>Sous le jeu, <b>clique sur un sort</b> pour le choisir, puis <b>clique dans le jeu</b> à l’endroit à viser.</li>'
+      + '<li><b>Orbe</b> : touche les cristaux pour ouvrir les portes de la même couleur.</li>'
+      + '<li><b>Glace</b> : transforme une rune en plateforme (un moment).</li>'
+      + (c.swap ? '<li><b>Échange</b> : lance l’éclair sur ton coéquipier, vous échangez vos places.</li>' : '')
+      + '<li>Raccourcis pour les habitués : <kbd>J</kbd> orbe, <kbd>K</kbd> glace' + (c.swap ? ', <kbd>E</kbd> échange' : '') + '.</li></ul>';
+  } else if (kit === 'archer') {
+    h += '<h4>Tu es l’Archer</h4><ul>'
+      + '<li>Sous le jeu, <b>clique sur un sort</b> pour le choisir, puis <b>clique dans le jeu</b> à l’endroit à viser. La flèche retombe : vise un peu plus haut.</li>'
+      + '<li><b>Flèche</b> : touche les cibles pour ouvrir les portes de la même couleur.</li>'
+      + (c.fire ? '<li><b>Feu</b> : brûle le bois (tout le bois relié brûle) et allume les torches.</li>' : '')
+      + '<li><b>Double saut</b> : appuie deux fois sur Espace. <b>Dash</b> : bouton Dash (ou <kbd>Maj</kbd>) pour une course éclair.</li>'
+      + '<li>Raccourcis pour les habitués : <kbd>J</kbd> flèche' + (c.fire ? ', <kbd>K</kbd> feu' : '') + ', <kbd>Maj</kbd> dash.</li></ul>';
+  } else {
+    h += '<h4>Ce niveau</h4><ul><li>Pas encore de pouvoirs : portez-vous, poussez-vous, coopérez !</li></ul>';
+  }
+  if (level && level.timer) h += `<h4>Chrono</h4><ul><li>Ce niveau est chronométré (${spokenTime(level.timer)}). Si le temps tombe à zéro, il recommence.</li></ul>`;
+  return h;
+}
+
+function showHelp() {
+  $('help-body').innerHTML = helpHtml();
+  $('help').classList.add('show');
+}
+function hideHelp() {
+  $('help').classList.remove('show');
+  try { localStorage.setItem('cordee.helpSeen', '1'); } catch { /* ignore */ }
+}
+$('help-close').onclick = hideHelp;
+$('help').addEventListener('mousedown', (e) => { if (e.target === $('help')) hideHelp(); });
+$('btn-help').addEventListener('mousedown', (e) => e.preventDefault());
+$('btn-help').onclick = () => (level ? showHelp() : null);
 
 /* ---------- Choix de l'apparence ---------- */
 function drawSkinThumb(cv, id, color, t) {
@@ -579,8 +756,11 @@ $('btn-copy').onclick = async () => {
 
 function updateMuteButton() {
   $('btn-mute').textContent = window.Sfx.isMuted() ? 'Son : coupé (M)' : 'Son : activé (M)';
+  $('btn-music').textContent = window.Sfx.musicEnabled() ? 'Musique : oui' : 'Musique : non';
 }
 $('btn-mute').onclick = () => { window.Sfx.toggle(); updateMuteButton(); window.Sfx.play('click'); };
+$('btn-music').onclick = () => { window.Sfx.toggleMusic(); updateMuteButton(); window.Sfx.play('click'); };
+[$('btn-mute'), $('btn-music')].forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
 updateMuteButton();
 
 // Lien d'invitation : ?room=ABCD pré-remplit le code
@@ -641,6 +821,9 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (!level) return;
+  if (e.code === 'Escape' && $('help').classList.contains('show')) return hideHelp();
+  if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : showHelp();
+  if (/^(Digit|Numpad)[1-3]$/.test(e.code) && !e.repeat) return armSlot(Number(e.code.slice(-1)));
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
   if (e.code === 'KeyJ' && !e.repeat) return cast(1);
@@ -674,7 +857,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (!level) return;
   e.preventDefault();
   Object.assign(mouse, canvasPoint(e), { has: true });
-  if (e.button === 0) cast(1);
+  if (e.button === 0) cast(slotAvailable(armed) ? armed : 1);
   if (e.button === 2) cast(2);
 });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -1183,9 +1366,11 @@ function drawAim(s) {
     }
   }
 
-  const path = Phys.projectilePath(L, kit === 'mage' ? 'orb' : 'arrow', { x: s.x, y: s.y, face: s.face }, mouse.x, mouse.y);
+  if (kit === 'mage' && armed === 2) return; // la glace se pose directement sur la rune surlignée
+  const kind = kit === 'mage' ? (armed === 3 ? 'swap' : 'orb') : (armed === 2 ? 'fire' : 'arrow');
+  const path = Phys.projectilePath(L, kind, { x: s.x, y: s.y, face: s.face }, mouse.x, mouse.y);
   ctx.save();
-  ctx.fillStyle = kit === 'mage' ? 'rgba(183, 156, 255, .75)' : 'rgba(230, 197, 138, .85)';
+  ctx.fillStyle = { orb: 'rgba(183, 156, 255, .75)', swap: 'rgba(255, 154, 208, .85)', fire: 'rgba(255, 154, 58, .9)', arrow: 'rgba(230, 197, 138, .85)' }[kind];
   path.pts.forEach(([x, y], i) => {
     if (i % 4 === 0) ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
   });
@@ -1196,33 +1381,6 @@ function drawAim(s) {
   ctx.arc(end[0], end[1], 5, 0, Math.PI * 2);
   ctx.stroke();
   ctx.restore();
-}
-
-function drawCooldowns() {
-  const kit = myKit();
-  if (kit === 'plain') return;
-  const cd = world.cd.find((c) => c[0] === myId);
-  let bars;
-  if (kit === 'mage') {
-    bars = [['Orbe (J)', cd ? cd[1] : 0, '#b79cff'], ['Glace (K)', cd ? cd[2] : 0, '#a0e1ff']];
-    if (level.cfg.swap) bars.push(['Échange (E)', cd ? cd[4] || 0 : 0, '#ff9ad0']);
-  } else {
-    bars = [['Flèche (J)', cd ? cd[1] : 0, '#e6c58a']];
-    if (level.cfg.fire) bars.push(['Feu (K)', cd ? cd[2] : 0, '#ff9a3a']);
-    bars.push(['Dash (L)', cd ? cd[3] : 0, '#9be564']);
-  }
-  bars.forEach(([label, remaining, color], i) => {
-    const x = 12 + i * 104;
-    const y = canvas.height - 28;
-    ctx.fillStyle = 'rgba(13, 13, 38, .75)';
-    ctx.fillRect(x, y, 96, 16);
-    ctx.fillStyle = color;
-    ctx.fillRect(x + 2, y + 2, 92 * (1 - remaining), 12);
-    ctx.font = '11px Nunito, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = remaining > 0 ? '#f3efe4' : '#16163a';
-    ctx.fillText(label, x + 6, y + 12);
-  });
 }
 
 /* ---------- Rendu : niveau ---------- */
@@ -1389,8 +1547,9 @@ function draw() {
 
   const mine = sprites.get(myId);
   if (mine && world.status === 'playing') drawAim(mine);
-  drawCooldowns();
+  if (frame % 3 === 0) updateActionCooldowns();
 }
 
 refreshPickers();
+window.Sfx.music('menu');
 draw();
