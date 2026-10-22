@@ -326,11 +326,50 @@
       ctx.fillStyle = o.color; // tache
       ctx.fillRect(x + 9, y + 8, 6, 3);
     },
+
+    // Cookie aux pépites de chocolat
+    cookie(ctx, x, y, o) {
+      ctx.fillStyle = '#d9a05b'; // pâte dorée
+      ctx.beginPath();
+      ctx.ellipse(x + W / 2, y + 15, 12.5, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e8bd7c'; // reflet
+      ctx.beginPath();
+      ctx.ellipse(x + 9, y + 8, 5, 3, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#b97a3a'; // bord bien cuit
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(x + W / 2, y + 15, 12, 12.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#4a2a18'; // pépites de chocolat
+      ctx.fillRect(x + 4, y + 6, 4, 3);
+      ctx.fillRect(x + 16, y + 4, 4, 3);
+      ctx.fillRect(x + 19, y + 13, 3, 4);
+      ctx.fillRect(x + 2, y + 15, 3, 3);
+      ctx.fillRect(x + 4, y + 19, 3, 3);
+      ctx.fillRect(x + 17, y + 19, 3, 3);
+      ctx.fillRect(x + 11, y + 3, 3, 2);
+      ctx.fillStyle = '#fff'; // yeux
+      ctx.fillRect(x + 6, y + 10, 5, 5);
+      ctx.fillRect(x + 13, y + 10, 5, 5);
+      ctx.fillStyle = '#16163a';
+      const px = o.dir > 0 ? 2 : 0;
+      ctx.fillRect(x + 6 + px, y + 12, 3, 3);
+      ctx.fillRect(x + 13 + px, y + 12, 3, 3);
+      ctx.strokeStyle = '#4a2a18'; // sourire
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(x + W / 2, y + 17, 4, 0.2 * Math.PI, 0.8 * Math.PI);
+      ctx.stroke();
+      ctx.fillStyle = o.color; // petit nœud à la couleur du joueur
+      ctx.fillRect(x + 6, y + 23, 12, 3);
+    },
   };
 
   const NAMES = {
     classic: 'Classique', knight: 'Chevalier', ninja: 'Ninja', robot: 'Robot', ghost: 'Fantôme', cat: 'Chat',
-    astro: 'Astronaute', pirate: 'Pirate', wizard: 'Sorcier', dino: 'Dino', pumpkin: 'Citrouille', frog: 'Grenouille',
+    astro: 'Astronaute', pirate: 'Pirate', wizard: 'Sorcier', dino: 'Dino', pumpkin: 'Citrouille', frog: 'Grenouille', cookie: 'Cookie',
   };
   const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4', '#f43f5e', '#94a3b8'];
 

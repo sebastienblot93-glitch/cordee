@@ -18,14 +18,14 @@ const ACCENT = { prairie: '#9be564', arcane: '#b79cff', dark: '#8aa0ff', sanctua
 // Sorts affichés dans la barre sous le jeu (slot 0 = dash)
 const SPELLS = {
   mage: [
-    { slot: 1, name: 'Orbe', key: 'J', color: '#b79cff', tip: 'Active les cristaux' },
-    { slot: 2, name: 'Glace', key: 'K', color: '#a0e1ff', tip: 'Crée des plateformes sur les runes' },
-    { slot: 3, name: 'Échange', key: 'E', color: '#ff9ad0', tip: 'Échange ta place avec l’autre joueur', need: 'swap' },
+    { slot: 1, name: 'Orbe', key: 'clic gauche', color: '#b79cff', tip: 'Active les cristaux' },
+    { slot: 2, name: 'Glace', key: 'clic droit', color: '#a0e1ff', tip: 'Crée des plateformes sur les runes' },
+    { slot: 3, name: 'Échange', key: 'bouton, puis clic gauche', color: '#ff9ad0', tip: 'Échange ta place avec l’autre joueur', need: 'swap' },
   ],
   archer: [
-    { slot: 1, name: 'Flèche', key: 'J', color: '#e6c58a', tip: 'Active les cibles' },
-    { slot: 2, name: 'Feu', key: 'K', color: '#ff9a3a', tip: 'Brûle le bois, allume les torches', need: 'fire' },
-    { slot: 0, name: 'Dash', key: 'Maj', color: '#9be564', tip: 'Course éclair', dash: true },
+    { slot: 1, name: 'Flèche', key: 'clic gauche', color: '#e6c58a', tip: 'Active les cibles' },
+    { slot: 2, name: 'Feu', key: 'clic droit', color: '#ff9a3a', tip: 'Brûle le bois, allume les torches', need: 'fire' },
+    { slot: 0, name: 'Dash', key: 'touche Maj', color: '#9be564', tip: 'Course éclair', dash: true },
   ],
 };
 
@@ -511,7 +511,7 @@ function updateRoleHint() {
     const tip = document.createElement('small');
     tip.textContent = d.tip;
     const key = document.createElement('small');
-    key.textContent = `raccourci : ${d.key}`;
+    key.textContent = d.key;
     const fill = document.createElement('i');
     b.append(name, tip, key, fill);
     b.addEventListener('mousedown', (e) => e.preventDefault());
@@ -564,14 +564,14 @@ function helpHtml() {
       + '<li><b>Orbe</b> : touche les cristaux pour ouvrir les portes de la même couleur.</li>'
       + '<li><b>Glace</b> : transforme une rune en plateforme (un moment).</li>'
       + (c.swap ? '<li><b>Échange</b> : lance l’éclair sur ton coéquipier, vous échangez vos places.</li>' : '')
-      + '<li>Raccourcis pour les habitués : <kbd>J</kbd> orbe, <kbd>K</kbd> glace' + (c.swap ? ', <kbd>E</kbd> échange' : '') + '.</li></ul>';
+      + '<li><b>Clic gauche</b> : lance le sort choisi (l’orbe au départ). <b>Clic droit</b> : pose de la glace.</li></ul>';
   } else if (kit === 'archer') {
     h += '<h4>Tu es l’Archer</h4><ul>'
       + '<li>Sous le jeu, <b>clique sur un sort</b> pour le choisir, puis <b>clique dans le jeu</b> à l’endroit à viser. La flèche retombe : vise un peu plus haut.</li>'
       + '<li><b>Flèche</b> : touche les cibles pour ouvrir les portes de la même couleur.</li>'
       + (c.fire ? '<li><b>Feu</b> : brûle le bois (tout le bois relié brûle) et allume les torches.</li>' : '')
       + '<li><b>Double saut</b> : appuie deux fois sur Espace. <b>Dash</b> : bouton Dash (ou <kbd>Maj</kbd>) pour une course éclair.</li>'
-      + '<li>Raccourcis pour les habitués : <kbd>J</kbd> flèche' + (c.fire ? ', <kbd>K</kbd> feu' : '') + ', <kbd>Maj</kbd> dash.</li></ul>';
+      + '<li><b>Clic gauche</b> : tire le sort choisi (la flèche au départ).' + (c.fire ? ' <b>Clic droit</b> : flèche de feu.' : '') + '</li></ul>';
   } else {
     h += '<h4>Ce niveau</h4><ul><li>Pas encore de pouvoirs : portez-vous, poussez-vous, coopérez !</li></ul>';
   }

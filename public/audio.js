@@ -10,7 +10,7 @@
   try { musicOn = localStorage.getItem('cordee.music') !== '0'; } catch { /* stockage indisponible */ }
 
   const MASTER_VOL = 0.16;
-  const MUSIC_VOL = 0.42;
+  const MUSIC_VOL = 0.21;
 
   function ctx() {
     if (ac) return ac;
