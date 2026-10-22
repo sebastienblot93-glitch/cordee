@@ -10,16 +10,22 @@
   const PHYS = {
     speed: 4.5, gravity: 0.5, jump: -9.5, maxFall: 12,
     dashSpeed: 10, dashTicks: 7, dashCooldown: 40,
+    spring: -14, // élan d'un ressort (environ 6 cases de haut)
   };
 
   // Projectiles : l'orbe du Mage vole droit, la flèche de l'Archer retombe (gravité)
   const PROJ = {
     orb: { speed: 9, gravity: 0, life: 90 },
     arrow: { speed: 12, gravity: 0.25, life: 130 },
+    fire: { speed: 12, gravity: 0.25, life: 130 }, // flèche de feu de l'Archer
+    swap: { speed: 10, gravity: 0, life: 70 }, // éclair d'échange du Mage
   };
 
   // Sorts : portée de la glace (px), durée (ticks), nombre max de blocs, recharges (ticks)
-  const SPELL = { reach: 224, iceLife: 480, iceMax: 3, cdOrb: 30, cdIce: 40, cdArrow: 25, defaultHold: 360 };
+  const SPELL = {
+    reach: 224, iceLife: 480, iceMax: 3, cdOrb: 30, cdIce: 40, cdArrow: 25, defaultHold: 360,
+    cdFire: 45, cdSwap: 150, burnDelay: 12, burnStep: 4,
+  };
 
   // Capacités par rôle. En dehors des niveaux "Arcanes", tout le monde est "plain".
   const KITS = { plain: {}, mage: {}, archer: { doubleJump: true, dash: true } };
@@ -35,6 +41,9 @@
   //   h  bloc caché (solide, mais visible seulement près de la lumière du Mage)
   //   r  zone de rune : le Mage peut y poser un bloc de glace
   //   ^  pics : un contact renvoie au dernier checkpoint
+  //   j  ressort : un joueur qui retombe dessus est propulsé très haut
+  //   t  bois : bloc solide que la flèche de feu de l'Archer brûle (et tout le bois relié)
+  //   f g e  torches des groupes 1 2 3 : allumées par la flèche de feu, elles ouvrent leurs portes
   function parseLevel(def) {
     const rows = Array.isArray(def) ? def : def.rows;
     const cfg = Array.isArray(def) ? {} : def;
@@ -47,6 +56,10 @@
     const targetAt = [];
     const hidden = [];
     const rune = [];
+    const wood = [];
+    const spring = [];
+    const torchAt = [];
+    const torches = [];
     const keys = [];
     const plates = [];
     const crystals = [];
@@ -59,11 +72,14 @@
 
     rows.forEach((row, ty) => {
       solid[ty] = []; gate[ty] = []; shut[ty] = []; crystalAt[ty] = []; targetAt[ty] = [];
-      hidden[ty] = []; rune[ty] = [];
+      hidden[ty] = []; rune[ty] = []; wood[ty] = []; spring[ty] = []; torchAt[ty] = [];
       [...row].forEach((ch, tx) => {
         solid[ty][tx] = ch === '#' || ch === 'h';
         hidden[ty][tx] = ch === 'h';
         rune[ty][tx] = ch === 'r';
+        wood[ty][tx] = ch === 't';
+        spring[ty][tx] = ch === 'j';
+        torchAt[ty][tx] = -1;
         gate[ty][tx] = ch >= 'a' && ch <= 'c' ? ch.charCodeAt(0) - 96 : 0;
         shut[ty][tx] = ch === 'w' ? 1 : ch === 'v' ? 2 : ch === 'u' ? 3 : 0;
         crystalAt[ty][tx] = -1;
@@ -81,6 +97,10 @@
           crystalAt[ty][tx] = crystals.length;
           crystals.push({ group: ch.charCodeAt(0) - 119, tx, ty, x: px, y: py });
         }
+        if (ch === 'f' || ch === 'g' || ch === 'e') {
+          torchAt[ty][tx] = torches.length;
+          torches.push({ group: ch === 'f' ? 1 : ch === 'g' ? 2 : 3, tx, ty, x: px, y: py });
+        }
         if (ch === 'o' || ch === 'p' || ch === 'q') {
           targetAt[ty][tx] = targets.length;
           targets.push({ group: ch === 'o' ? 1 : ch === 'p' ? 2 : 3, tx, ty, x: px, y: py });
@@ -96,8 +116,9 @@
     });
 
     return {
-      solid, gate, shut, crystalAt, targetAt, hidden, rune,
-      keys, plates, crystals, targets, spikes, checkpoints, runes, door, spawn, w, h, cfg,
+      solid, gate, shut, crystalAt, targetAt, hidden, rune, wood, spring, torchAt,
+      keys, plates, crystals, targets, torches, spikes, checkpoints, runes, door, spawn, w, h, cfg,
+      burnt: new Set(), // blocs de bois brûlés (index ty * w + tx)
       open: new Set(), // numéros de portes ouvertes
       pressed: new Set(), // plaques pressées
       shutOpen: new Set(), // volets ouverts
@@ -109,6 +130,7 @@
   function tileSolid(L, tx, ty) {
     if (ty < 0 || tx < 0 || ty >= L.h || tx >= L.w) return true;
     if (L.solid[ty][tx]) return true;
+    if (L.wood[ty][tx] && !L.burnt.has(ty * L.w + tx)) return true;
     const g = L.gate[ty][tx];
     if (g && !L.open.has(g)) return true;
     const s = L.shut[ty][tx];
@@ -224,6 +246,22 @@
       }
       p.vy = 0;
     }
+    // Ressort : on rebondit très haut en retombant dessus
+    if (p.vy >= 0 && onSpring(L, p)) {
+      p.vy = PHYS.spring;
+      p.onGround = false;
+      p.airJump = true;
+      p.dashAvail = true;
+      p.jumpBuf = 0;
+      p.bounced = 6; // pour l'animation côté client
+    }
+  }
+
+  function onSpring(L, p) {
+    const tx = Math.floor((p.x + PW / 2) / TILE);
+    const ty = Math.floor((p.y + PH - 0.01) / TILE);
+    if (ty < 0 || tx < 0 || ty >= L.h || tx >= L.w) return false;
+    return L.spring[ty][tx];
   }
 
   function touchesRect(p, r) {
@@ -264,11 +302,17 @@
       pr.y += pr.vy / n;
       const tx = Math.floor(pr.x / TILE);
       const ty = Math.floor(pr.y / TILE);
-      if (tileSolid(L, tx, ty)) return { type: 'wall' };
+      if (tileSolid(L, tx, ty)) {
+        if (pr.kind === 'fire' && L.wood[ty] && L.wood[ty][tx] && !L.burnt.has(ty * L.w + tx)) return { type: 'wood', tx, ty };
+        return { type: 'wall' };
+      }
+      if (pr.kind === 'swap') continue; // l'éclair d'échange ne touche que les murs et les joueurs
       const ci = L.crystalAt[ty][tx];
       if (ci >= 0) return pr.kind === 'orb' ? { type: 'crystal', index: ci } : { type: 'absorb' };
       const ti = L.targetAt[ty][tx];
-      if (ti >= 0) return pr.kind === 'arrow' ? { type: 'target', index: ti } : { type: 'absorb' };
+      if (ti >= 0) return pr.kind === 'arrow' || pr.kind === 'fire' ? { type: 'target', index: ti } : { type: 'absorb' };
+      const fi = L.torchAt[ty][tx];
+      if (fi >= 0 && pr.kind === 'fire') return { type: 'torch', index: fi };
     }
     pr.vy += spec.gravity;
     pr.life--;
@@ -354,8 +398,30 @@
     return false;
   }
 
+  // Bois relié à une case de bois touchée : liste [{idx, d}] (d = distance de propagation du feu)
+  function woodCluster(L, tx, ty) {
+    const out = [];
+    const seen = new Set();
+    const q = [[tx, ty, 0]];
+    seen.add(ty * L.w + tx);
+    while (q.length) {
+      const [x, y, d] = q.shift();
+      out.push({ idx: y * L.w + x, d });
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= L.w || ny >= L.h) continue;
+        const k = ny * L.w + nx;
+        if (seen.has(k) || !L.wood[ny][nx] || L.burnt.has(k)) continue;
+        seen.add(k);
+        q.push([nx, ny, d + 1]);
+      }
+    }
+    return out;
+  }
+
   const API = {
-    TILE, PW, PH, PHYS, PROJ, SPELL, KITS,
+    TILE, PW, PH, PHYS, PROJ, SPELL, KITS, woodCluster, onSpring,
     parseLevel, tileSolid, hitsTile, gatesTouching, overlapsAnyBlocker, moveAxis,
     newPlayerState, stepPlayer, touchesRect, hitsSpikes,
     launchProjectile, stepProjectile, projectilePath, resolvePlayers, unstick,

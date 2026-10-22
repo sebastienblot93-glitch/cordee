@@ -2,16 +2,18 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { WebSocketServer } = require('ws');
-const { LEVELS } = require('./levels');
+const { LEVELS, CHAPTERS } = require('./levels');
 const {
   TILE, PW, PH, SPELL, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
-  touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick,
+  touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick, woodCluster,
 } = require('./physics');
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 8;
-const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899'];
+const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4', '#f43f5e', '#94a3b8'];
 const ROLES = ['mage', 'archer'];
+// Apparences proposées dans le salon (le dessin est fait par le navigateur)
+const SKINS = ['classic', 'knight', 'ninja', 'robot', 'ghost', 'cat', 'astro', 'pirate', 'wizard', 'dino', 'pumpkin', 'frog'];
 const FOREVER = 1e12;
 
 const app = express();
@@ -22,6 +24,7 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 const rooms = new Map(); // code -> room
+if (process.env.CORDEE_TEST) global.__rooms = rooms; // uniquement pour les tests automatiques
 
 /* ---------- Monde : volets, plaques, cristaux, cibles, portes ---------- */
 function holdFor(L, group) {
@@ -55,6 +58,7 @@ function updateWorld(room, list) {
     if (c.seqIndex < 0) trig[c.group].push(t < room.crystalUntil[i]);
   });
   L.targets.forEach((tg, i) => trig[tg.group].push(t < room.targetUntil[i]));
+  L.torches.forEach((tc, i) => trig[tc.group].push(t < room.torchUntil[i]));
 
   // Une porte s'ouvre si un déclencheur est actif (ou tous, pour les groupes "and")
   const open = new Set();
@@ -100,6 +104,32 @@ function hitTarget(room, i) {
   room.targetUntil[i] = hold === 0 ? FOREVER : room.time + hold;
 }
 
+function hitTorch(room, i) {
+  const L = room.level;
+  const hold = holdFor(L, L.torches[i].group);
+  room.torchUntil[i] = hold === 0 ? FOREVER : room.time + hold;
+}
+
+// Le feu se propage de proche en proche dans le bois relié
+function startBurn(room, tx, ty) {
+  const L = room.level;
+  const queued = new Set(room.burn.map((b) => b.idx));
+  for (const c of woodCluster(L, tx, ty)) {
+    if (queued.has(c.idx)) continue;
+    room.burn.push({ idx: c.idx, at: room.time + SPELL.burnDelay + c.d * SPELL.burnStep });
+  }
+}
+
+function stepBurn(room) {
+  if (!room.burn.length) return;
+  const L = room.level;
+  room.burn = room.burn.filter((b) => {
+    if (b.at > room.time) return true;
+    L.burnt.add(b.idx);
+    return false;
+  });
+}
+
 /* ---------- Clés, porte, pièges ---------- */
 function collectKeys(room, list) {
   room.level.keys.forEach((k, i) => {
@@ -133,6 +163,7 @@ function respawn(room, p) {
   p.airJump = true;
   p.dashAvail = true;
   room.deaths++;
+  room.events.push(['die', Math.round(p.x), Math.round(p.y)]);
 }
 
 function hazardsAndCheckpoints(room, list) {
@@ -176,6 +207,12 @@ function cast(room, p, slot, ax, ay) {
     L.ice.add(idx);
     room.ice.push({ idx, until: t + SPELL.iceLife });
     while (room.ice.length > SPELL.iceMax) L.ice.delete(room.ice.shift().idx);
+  } else if (p.kit === 'archer' && slot === 2 && L.cfg.fire && t >= p.cd[1]) {
+    p.cd[1] = t + SPELL.cdFire;
+    room.projectiles.push({ ...launchProjectile('fire', p, ax, ay), owner: p.id });
+  } else if (p.kit === 'mage' && slot === 3 && L.cfg.swap && t >= p.cd[2]) {
+    p.cd[2] = t + SPELL.cdSwap;
+    room.projectiles.push({ ...launchProjectile('swap', p, ax, ay), owner: p.id });
   }
   if (room.projectiles.length > 16) room.projectiles.splice(0, room.projectiles.length - 16);
 }
@@ -184,11 +221,40 @@ function stepProjectiles(room) {
   const L = room.level;
   room.projectiles = room.projectiles.filter((pr) => {
     const ev = stepProjectile(L, pr);
-    if (!ev) return true;
+    if (!ev) {
+      if (pr.kind === 'swap' && trySwap(room, pr)) return false;
+      return true;
+    }
     if (ev.type === 'crystal') hitCrystal(room, ev.index);
     if (ev.type === 'target') hitTarget(room, ev.index);
+    if (ev.type === 'torch') hitTorch(room, ev.index);
+    if (ev.type === 'wood') startBurn(room, ev.tx, ev.ty);
+    if (pr.kind === 'fire' || ev.type === 'crystal' || ev.type === 'target') {
+      room.events.push([pr.kind === 'fire' ? 'fire' : 'hit', Math.round(pr.x), Math.round(pr.y)]);
+    }
     return false;
   });
+}
+
+// L'éclair d'échange : le Mage échange sa place avec le premier joueur touché
+function trySwap(room, pr) {
+  const owner = room.players.get(pr.owner);
+  if (!owner) return true;
+  for (const q of room.players.values()) {
+    if (q === owner) continue;
+    if (pr.x > q.x - 6 && pr.x < q.x + PW + 6 && pr.y > q.y - 6 && pr.y < q.y + PH + 6) {
+      const ox = owner.x;
+      const oy = owner.y;
+      room.events.push(['swap', Math.round(ox), Math.round(oy), Math.round(q.x), Math.round(q.y)]);
+      owner.x = q.x; owner.y = q.y;
+      q.x = ox; q.y = oy;
+      for (const z of [owner, q]) {
+        z.vy = 0; z.dashT = 0; z.airJump = true; z.dashAvail = true;
+      }
+      return true;
+    }
+  }
+  return false;
 }
 
 function expireIce(room) {
@@ -212,7 +278,7 @@ function resetPlayers(room) {
     p.input.dash = false;
     p.x = spawn.x + (i % 4) * 4;
     p.y = spawn.y;
-    p.cd = [0, 0];
+    p.cd = [0, 0, 0];
     p.jumpPending = false;
     p.dashPending = false;
     i++;
@@ -232,6 +298,17 @@ function ensureRoles(room) {
   list[list.length - 1].role = missing;
 }
 
+function chapterInfo(index) {
+  const def = LEVELS[index];
+  const ch = CHAPTERS[def.chapter];
+  const first = LEVELS.findIndex((l) => l.chapter === def.chapter);
+  const count = LEVELS.filter((l) => l.chapter === def.chapter).length;
+  return {
+    index: def.chapter, name: ch.name, theme: ch.theme, blurb: ch.blurb, powers: ch.powers || [],
+    pos: index - first + 1, count, first: index === first,
+  };
+}
+
 function startMsg(room) {
   const def = LEVELS[room.levelIndex];
   return {
@@ -242,9 +319,12 @@ function startMsg(room) {
     total: LEVELS.length,
     name: def.name,
     hint: def.hint,
+    chapter: chapterInfo(room.levelIndex),
     cfg: {
       abilities: !!def.abilities,
       dark: !!def.dark,
+      fire: !!def.fire,
+      swap: !!def.swap,
       seqGroup: def.sequence ? def.sequence.group : 0,
       labels: def.labels || [],
     },
@@ -265,6 +345,9 @@ function freshRoomState(room, index) {
   room.latch = {};
   room.crystalUntil = room.level.crystals.map(() => 0);
   room.targetUntil = room.level.targets.map(() => 0);
+  room.torchUntil = room.level.torches.map(() => 0);
+  room.burn = [];
+  room.events = [];
   room.seq = { progress: 0, done: false, flash: 0, lastHit: 0 };
 }
 
@@ -311,14 +394,19 @@ function stateMsg(room, list) {
     tg: L.targets.map((_, i) => (t < room.targetUntil[i] ? 1 : 0)),
     seq: { p: room.seq.progress, done: room.seq.done, flash: room.seq.flash > 0 },
     sh: [...L.shutOpen],
+    tc: L.torches.map((_, i) => (t < room.torchUntil[i] ? 1 : 0)),
+    bn: room.burn.map((b) => b.idx),
+    bt: [...L.burnt],
+    ev: room.events,
     ice: room.ice.map((b) => [b.idx % L.w, Math.floor(b.idx / L.w), b.until - t]),
     proj: room.projectiles.map((pr) => [pr.kind, Math.round(pr.x * 10) / 10, Math.round(pr.y * 10) / 10, Math.round(pr.vx * 100) / 100, Math.round(pr.vy * 100) / 100]),
     cps: [...room.cps],
     cd: list.map((p) => [
       p.id,
       cdRatio(p.cd[0], p.kit === 'archer' ? SPELL.cdArrow : SPELL.cdOrb),
-      cdRatio(p.cd[1], SPELL.cdIce),
+      cdRatio(p.cd[1], p.kit === 'archer' ? SPELL.cdFire : SPELL.cdIce),
       Math.max(0, Math.min(1, p.dashCd / 40)),
+      cdRatio(p.cd[2], SPELL.cdSwap),
     ]),
     deaths: room.deaths,
   };
@@ -343,6 +431,7 @@ function tick(room) {
   collectKeys(room, list);
   hazardsAndCheckpoints(room, list);
   stepProjectiles(room);
+  stepBurn(room);
   expireIce(room);
 
   const seq = L.cfg.sequence;
@@ -362,7 +451,10 @@ function tick(room) {
   }
 
   room.tickCount++;
-  if (room.tickCount % 2 === 0) broadcast(room, stateMsg(room, list)); // 30 mises à jour par seconde
+  if (room.tickCount % 2 === 0) {
+    broadcast(room, stateMsg(room, list)); // 30 mises à jour par seconde
+    room.events = [];
+  }
 }
 
 setInterval(() => {
@@ -394,19 +486,21 @@ function lobbyMsg(room) {
     code: room.code,
     hostId: room.hostId,
     status: room.status,
-    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities })),
-    players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role })),
+    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities, chapter: l.chapter })),
+    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
+    players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role, skin: p.skin })),
   };
 }
 
-function addPlayer(room, ws, name) {
+function addPlayer(room, ws, name, skin, wantColor) {
   const used = new Set([...room.players.values()].map((p) => p.color));
-  const color = COLORS.find((c) => !used.has(c)) || COLORS[0];
+  const color = (COLORS.includes(wantColor) && !used.has(wantColor) && wantColor)
+    || COLORS.find((c) => !used.has(c)) || COLORS[0];
   const counts = ROLES.map((r) => [...room.players.values()].filter((p) => p.role === r).length);
   const role = counts[0] <= counts[1] ? 'mage' : 'archer';
   const abilities = room.level.cfg.abilities;
   const player = Object.assign(newPlayerState(abilities ? role : 'plain'), {
-    id: ws.id, ws, name, color, role, cd: [0, 0], jumpPending: false, dashPending: false, jpSeen: 0,
+    id: ws.id, ws, name, color, role, skin: cleanSkin(skin), cd: [0, 0, 0], jumpPending: false, dashPending: false, jpSeen: 0,
   });
   player.x = room.level.spawn.x;
   player.y = room.level.spawn.y;
@@ -427,6 +521,10 @@ function removePlayer(ws) {
   }
   if (room.hostId === ws.id) room.hostId = room.players.keys().next().value;
   broadcast(room, lobbyMsg(room));
+}
+
+function cleanSkin(s) {
+  return SKINS.includes(s) ? s : 'classic';
 }
 
 function cleanName(n) {
@@ -454,7 +552,7 @@ wss.on('connection', (ws) => {
         };
         freshRoomState(fresh, 0);
         rooms.set(code, fresh);
-        addPlayer(fresh, ws, cleanName(msg.name));
+        addPlayer(fresh, ws, cleanName(msg.name), msg.skin, msg.color);
         send(ws, { t: 'joined', id: ws.id });
         broadcast(fresh, lobbyMsg(fresh));
         break;
@@ -464,7 +562,7 @@ wss.on('connection', (ws) => {
         const target = rooms.get(String(msg.code || '').toUpperCase().trim());
         if (!target) return send(ws, { t: 'error', msg: 'Room introuvable. Vérifie le code.' });
         if (target.players.size >= MAX_PLAYERS) return send(ws, { t: 'error', msg: 'Room pleine.' });
-        addPlayer(target, ws, cleanName(msg.name));
+        addPlayer(target, ws, cleanName(msg.name), msg.skin, msg.color);
         send(ws, { t: 'joined', id: ws.id });
         broadcast(target, lobbyMsg(target));
         if (target.status !== 'lobby') send(ws, startMsg(target));
@@ -511,6 +609,16 @@ wss.on('connection', (ws) => {
           p.jpSeen = msg.jp;
           p.jumpPending = true; // nouvelle pression de la touche saut (double saut)
         }
+        break;
+      }
+      case 'look': {
+        // Change d'apparence (skin et couleur) à tout moment
+        const p = room && room.players.get(ws.id);
+        if (!p) return;
+        p.skin = cleanSkin(msg.skin);
+        const taken = [...room.players.values()].some((q) => q !== p && q.color === msg.color);
+        if (COLORS.includes(msg.color) && !taken) p.color = msg.color;
+        broadcast(room, lobbyMsg(room));
         break;
       }
       case 'ping': {
