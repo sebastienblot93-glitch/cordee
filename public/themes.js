@@ -642,13 +642,27 @@
   }
 
   // Dessine le fond ; shift entre -1 et 1 (position moyenne des joueurs) → parallaxe
+  // Le ciel et toutes les couches sont assemblés dans un seul canvas, refait seulement quand le parallaxe a bougé
+  // d'au moins ~0,4 pixel (le fond ne coûte presque rien quand les joueurs ne bougent pas).
   function drawBackground(g, bg, shift) {
-    g.drawImage(bg.sky, 0, 0, bg.w, bg.h);
-    const s = Math.max(-1, Math.min(1, shift || 0));
-    for (let i = 0; i < bg.layers.length; i++) {
-      const l = bg.layers[i];
-      g.drawImage(l.img, -bg.m - s * bg.m * l.depth, 0, bg.w + bg.m * 2, bg.h);
+    const s = Math.round(Math.max(-1, Math.min(1, shift || 0)) * 50) / 50;
+    if (!bg.cache) {
+      bg.cache = document.createElement('canvas');
+      bg.cache.width = bg.sky.width;
+      bg.cache.height = bg.sky.height;
+      bg.cacheShift = null;
     }
+    if (bg.cacheShift !== s) {
+      bg.cacheShift = s;
+      const cg = bg.cache.getContext('2d');
+      cg.setTransform(bg.res, 0, 0, bg.res, 0, 0);
+      cg.drawImage(bg.sky, 0, 0, bg.w, bg.h);
+      for (let i = 0; i < bg.layers.length; i++) {
+        const l = bg.layers[i];
+        cg.drawImage(l.img, -bg.m - s * bg.m * l.depth, 0, bg.w + bg.m * 2, bg.h);
+      }
+    }
+    g.drawImage(bg.cache, 0, 0, bg.w, bg.h);
   }
 
   /* ---------- Blocs solides ---------- */

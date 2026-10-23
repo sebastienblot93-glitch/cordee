@@ -4,7 +4,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { LEVELS, CHAPTERS } = require('./levels');
 const {
-  TILE, PW, PH, SPELL, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
+  TILE, PW, PH, SPELL, ICE_PAD, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
   touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick, woodCluster,
 } = require('./physics');
 
@@ -61,6 +61,8 @@ app.get('/diag', (req, res) => {
 
 app.use(express.static(PUBLIC_DIR));
 const server = http.createServer(app);
+// Latence : on désactive l'algorithme de Nagle (qui retarde l'envoi des petits paquets) sur chaque connexion
+server.on('connection', (sock) => sock.setNoDelay(true));
 const wss = new WebSocketServer({ server });
 
 const rooms = new Map(); // code -> room
@@ -241,7 +243,7 @@ function cast(room, p, slot, ax, ay) {
     if (dist > SPELL.reach) return;
     const idx = ty * L.w + tx;
     if (L.ice.has(idx)) return;
-    const cell = { x: tx * TILE, y: ty * TILE, w: TILE, h: TILE };
+    const cell = { x: tx * TILE - ICE_PAD, y: ty * TILE, w: TILE + 2 * ICE_PAD, h: TILE };
     if ([...room.players.values()].some((q) => touchesRect(q, cell))) return;
     p.cd[1] = t + SPELL.cdIce;
     L.ice.add(idx);
@@ -515,14 +517,28 @@ function tick(room) {
 
   room.tickCount++;
   if (room.tickCount % 2 === 0) {
-    broadcast(room, stateMsg(room, list)); // 30 mises à jour par seconde
+    broadcast(room, stateMsg(room, list)); // état complet : 30 par seconde
     room.events = [];
+  } else {
+    // un petit message de positions à chaque autre tick : les déplacements arrivent 60 fois par seconde
+    broadcast(room, { t: 'pos', p: list.map((p) => [p.id, Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10, p.face]) });
   }
 }
 
+// Boucle à pas fixe : exactement 60 ticks par seconde (un simple setInterval(…, 16) en ferait ~62 et dériverait),
+// vérifiée toutes les 4 ms pour que chaque tick parte au bon moment, sans à-coups.
+const STEP_MS = 1000 / 60;
+let stepAcc = 0;
+let stepPrev = performance.now();
 setInterval(() => {
-  for (const room of rooms.values()) if (room.status !== 'lobby') tick(room);
-}, 1000 / 60);
+  const now = performance.now();
+  stepAcc += Math.min(now - stepPrev, 100); // si le serveur a été gelé, on ne rattrape pas plus de 100 ms
+  stepPrev = now;
+  while (stepAcc >= STEP_MS) {
+    stepAcc -= STEP_MS;
+    for (const room of rooms.values()) if (room.status !== 'lobby') tick(room);
+  }
+}, 4);
 
 /* ---------- Rooms ---------- */
 function makeCode() {

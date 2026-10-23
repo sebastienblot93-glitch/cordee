@@ -139,6 +139,18 @@
     return L.ice.size > 0 && L.ice.has(ty * L.w + tx);
   }
 
+  // Les blocs de glace débordent de quelques pixels de chaque côté (plateformes plus larges, plus faciles à atteindre)
+  const ICE_PAD = 5;
+  function hitsIcePad(L, x, y) {
+    if (!L.ice.size) return false;
+    for (const idx of L.ice) {
+      const bx = (idx % L.w) * TILE;
+      const by = Math.floor(idx / L.w) * TILE;
+      if (x < bx + TILE + ICE_PAD && x + PW > bx - ICE_PAD && y < by + TILE && y + PH > by) return true;
+    }
+    return false;
+  }
+
   function tileBounds(x, y) {
     return {
       x0: Math.floor(x / TILE),
@@ -155,7 +167,7 @@
         if (tileSolid(L, tx, ty)) return true;
       }
     }
-    return false;
+    return hitsIcePad(L, x, y);
   }
 
   // Portes que le joueur chevauche : elles restent ouvertes tant qu'il est dedans
@@ -422,7 +434,7 @@
   }
 
   const API = {
-    TILE, PW, PH, PHYS, PROJ, SPELL, KITS, woodCluster, onSpring,
+    TILE, PW, PH, PHYS, PROJ, SPELL, KITS, ICE_PAD, woodCluster, onSpring,
     parseLevel, tileSolid, hitsTile, gatesTouching, overlapsAnyBlocker, moveAxis,
     newPlayerState, stepPlayer, touchesRect, hitsSpikes,
     launchProjectile, stepProjectile, projectilePath, resolvePlayers, unstick,

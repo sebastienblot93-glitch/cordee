@@ -52,7 +52,7 @@ const sprites = new Map(); // id -> { x, y, tx, ty, face, vy, ... }
 const mouse = { x: 0, y: 0, has: false };
 
 // Netteté : sur un écran HiDPI, le canvas est dessiné à résolution double (RES). LW x LH = taille logique du niveau.
-const RES = (window.devicePixelRatio || 1) >= 1.5 ? 2 : 1;
+let RES = (window.devicePixelRatio || 1) >= 1.5 ? 2 : 1;
 let LW = 960;
 let LH = 480;
 
@@ -302,6 +302,9 @@ function handle(msg) {
     case 'state':
       applyState(msg);
       break;
+    case 'pos':
+      applyPositions(msg);
+      break;
     case 'pong':
       pingRtt = Math.min(2000, Math.max(1, pingRtt * 0.7 + (performance.now() - msg.c) * 0.3));
       $('hud-ping').textContent = `Ping ${Math.round(pingRtt)} ms`;
@@ -314,7 +317,7 @@ const parts = [];
 let shakeMag = 0;
 function shake(m) { shakeMag = Math.max(shakeMag, m); }
 function addPart(p) {
-  if (parts.length > 700) parts.shift();
+  if (parts.length > (fxLow ? 220 : 700)) parts.shift();
   parts.push(p);
 }
 function burst(x, y, color, n, speed = 2.5, grav = 0.08, life = 36, size = 3, extra) {
@@ -615,6 +618,18 @@ function detectCasts(prev, msg) {
   });
 }
 
+// Message de positions seul (entre deux états complets) : met à jour la cible des sprites, rien d'autre
+function applyPositions(msg) {
+  if (!level || !world) return;
+  for (const [id, x, y, face] of msg.p) {
+    const s = sprites.get(id);
+    if (!s) continue;
+    s.tx = x;
+    s.ty = y;
+    s.face = face;
+  }
+}
+
 function applyState(msg) {
   if (!level) return;
   const prev = world || {};
@@ -628,13 +643,13 @@ function applyState(msg) {
     let s = sprites.get(id);
     if (!s) {
       sprites.set(id, (s = {
-        x, y, tx: x, ty: y, py: y, face, vy: 0, air: false, mv: false, t: Math.random() * 100,
+        x, y, tx: x, ty: y, fx: x, fy: y, py: y, face, vy: 0, air: false, mv: false, t: Math.random() * 100,
         walk: 0, land: 0, pop: 14, castT: 0, castAng: 0, castKind: '', dashT: 0, lx: 0, ly: 0,
       }));
       sparks(x + PW / 2, y + PH / 2, '#ffffff', 6, 2.4, 26);
     }
-    const dy = y - s.ty;
-    const dx = x - s.tx;
+    const dy = y - s.fy; // écarts mesurés depuis le dernier état complet (30 par seconde), pas depuis le dernier message de positions
+    const dx = x - s.fx;
     if (Math.hypot(dx, dy) > 70) {
       // téléportation (retour au checkpoint, échange) : on réapparaît d'un coup, avec un petit effet
       s.x = x; s.y = y; s.py = y; s.pop = 12;
@@ -665,6 +680,8 @@ function applyState(msg) {
     s.mv = Math.abs(dx) > 0.4;
     s.tx = x;
     s.ty = y;
+    s.fx = x;
+    s.fy = y;
     s.face = face;
   }
   detectCasts(prev, msg);
@@ -1294,7 +1311,8 @@ window.addEventListener('blur', () => {
 });
 
 const canvas = $('canvas');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d'); // 'let' : on le remplace un instant pour pré-dessiner les petits sprites (voir cachedSprite)
+const mainCtx = ctx;
 
 function canvasPoint(e) {
   const r = canvas.getBoundingClientRect();
@@ -1329,6 +1347,7 @@ const OUTLINE = '#1d1a3b';
 
 // Lueur additive (sprite pré-calculé, très peu coûteux)
 function glowAt(x, y, r, color, a) {
+  if (fxLow) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   window.Themes.halo(ctx, x, y, r, color, a);
@@ -1385,13 +1404,48 @@ function drawShape(kind, cx, cy, size, color) {
   ctx.fill();
 }
 
+// Petits éléments qui ne changent presque pas : dessinés une fois dans un mini-canvas, puis simplement collés à chaque image.
+const spriteCache = new Map();
+function cachedSprite(key, w, h, ox, oy, fn) {
+  let c = spriteCache.get(key);
+  if (!c) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.ceil(w * RES);
+    cv.height = Math.ceil(h * RES);
+    const g = cv.getContext('2d');
+    g.scale(RES, RES);
+    g.translate(ox, oy);
+    const keepFrame = frame;
+    ctx = g;
+    try { fn(); } finally { ctx = mainCtx; frame = keepFrame; }
+    c = { cv, ox, oy, w, h };
+    spriteCache.set(key, c);
+  }
+  return c;
+}
+function blitSprite(c, x, y) {
+  ctx.drawImage(c.cv, x - c.ox, y - c.oy, c.w, c.h);
+}
+
 function drawGate(x, y, T, group, isOpen) {
-  const color = GROUP_COLORS[group];
   const tx = x / T;
   const ty = y / T;
   const ch = String.fromCharCode(96 + group);
   const up = !!(level.rows[ty - 1] && level.rows[ty - 1][tx] === ch);
   const down = !!(level.rows[ty + 1] && level.rows[ty + 1][tx] === ch);
+  // l'animation (rayures, pointillés) tourne par pas de 2 images : 40 positions, qui bouclent exactement
+  const phase = (Math.floor(frame / 2) % 40) * 2;
+  const spr = cachedSprite(`gate|${group}|${up}|${down}|${isOpen}|${phase}`, T + 8, T + 8, 4, 4, () => {
+    frame = phase;
+    drawGateBody(0, 0, T, group, isOpen, up, down);
+  });
+  blitSprite(spr, x, y);
+  // la lueur (coûteuse) n'est dessinée que sur une case sur deux, un peu plus large
+  if (!isOpen && ty % 2 === 0) glowAt(x + T / 2, y + T, 36, GROUP_COLORS[group], 0.5 + Math.sin(frame * 0.12 + y) * 0.1);
+}
+
+function drawGateBody(x, y, T, group, isOpen, up, down) {
+  const color = GROUP_COLORS[group];
   const cap = (cy) => {
     rrPath(x + 3, cy, T - 6, 7, 3);
     fillOut(vGrad(cy, cy + 7, '#8a90c4', '#4a4f82'), 1.5);
@@ -1443,7 +1497,6 @@ function drawGate(x, y, T, group, isOpen) {
   ctx.lineWidth = 1.6;
   ctx.strokeStyle = OUTLINE;
   ctx.stroke();
-  glowAt(x + T / 2, y + T / 2, 28, color, 0.4 + Math.sin(frame * 0.12 + y) * 0.1);
   if (!up) cap(y);
   if (!down) cap(y + T - 7);
 }
@@ -1705,6 +1758,10 @@ function drawCheckpoint(c, T, active, frame) {
 
 function drawSpikes(x, y, T, theme) {
   const hot = theme === 'forge';
+  blitSprite(cachedSprite(`spikes|${hot}`, T + 4, T + 4, 2, 2, () => drawSpikesBody(0, 0, T, hot)), x, y);
+}
+
+function drawSpikesBody(x, y, T, hot) {
   rrPath(x + 1, y + T - 5, T - 2, 5, 2);
   fillOut('#4a4f7a', 1.4);
   for (let i = 0; i < 3; i++) {
@@ -1751,10 +1808,12 @@ function drawRune(x, y, T, hover, ok) {
 function drawIce(b, T, frame) {
   const [tx, ty, left] = b;
   if (left < 90 && Math.floor(frame / 6) % 2 === 0) return; // clignote juste avant de fondre
-  const x = tx * T;
+  const pad = Phys.ICE_PAD || 0; // la glace déborde un peu de chaque côté (voir physics.js)
+  const x = tx * T - pad;
   const y = ty * T;
-  glowAt(x + T / 2, y + T / 2, 30, '#a0e1ff', 0.3);
-  rrPath(x + 0.5, y + 0.5, T - 1, T - 1, 5);
+  const W = T + 2 * pad;
+  glowAt(x + W / 2, y + T / 2, 30 + pad, '#a0e1ff', 0.3);
+  rrPath(x + 0.5, y + 0.5, W - 1, T - 1, 5);
   fillOut(vGrad(y, y + T, 'rgba(226,247,255,.96)', 'rgba(120,200,240,.94)'), 1.8, '#2f6a96');
   ctx.fillStyle = 'rgba(255,255,255,.55)';
   ctx.beginPath();
@@ -1768,9 +1827,9 @@ function drawIce(b, T, frame) {
   ctx.beginPath();
   ctx.moveTo(x + 8, y + T - 6);
   ctx.lineTo(x + 20, y + 14);
-  ctx.lineTo(x + T - 5, y + 18);
+  ctx.lineTo(x + W - 5, y + 18);
   ctx.stroke();
-  if (frame % 9 === 0) addPart({ x: x + Math.random() * T, y: y + Math.random() * T, vx: 0, vy: -0.2, g: 0, life: 20, max: 20, color: '#ffffff', size: 2.5, shape: 'star', add: true });
+  if (frame % 9 === 0) addPart({ x: x + Math.random() * W, y: y + Math.random() * T, vx: 0, vy: -0.2, g: 0, life: 20, max: 20, color: '#ffffff', size: 2.5, shape: 'star', add: true });
 }
 
 function drawSpring(x, y, T, anim) {
@@ -1801,6 +1860,11 @@ function drawSpring(x, y, T, anim) {
 }
 
 function drawWood(x, y, T, burning, frame) {
+  if (!burning) return blitSprite(cachedSprite('wood', T + 4, T + 4, 2, 2, () => drawWoodBody(0, 0, T, false, 0)), x, y);
+  drawWoodBody(x, y, T, burning, frame);
+}
+
+function drawWoodBody(x, y, T, burning, frame) {
   rrPath(x + 0.5, y + 0.5, T - 1, T - 1, 3);
   fillOut(vGrad(y, y + T, burning ? '#8a4524' : '#d09550', burning ? '#5a2a14' : '#9c6531'), 1.8, '#3a2210');
   ctx.strokeStyle = burning ? 'rgba(30,10,4,.6)' : 'rgba(70,40,14,.55)';
@@ -2366,11 +2430,45 @@ function makeVignette(w, h, theme) {
   return c;
 }
 
+/* ---------- Qualité automatique : si l'ordinateur rame, on allège le rendu ---------- */
+let fxLow = false; // mode économique : moins de lueurs et de particules
+let lastDrawAt = 0;
+let slowAvg = 16.7;
+let slowCount = 0;
+function rebuildAssets() {
+  if (!level) return;
+  spriteCache.clear();
+  setupCanvas();
+  level.bg = window.Themes.makeBackground(level.theme, LW, LH, level.index + 1, RES);
+  level.tiles = window.Themes.makeTiles(level.theme, level.rows, level.tile, level.index + 1, RES);
+}
+function lighten() {
+  if (RES > 1) { // 1er palier : on arrête le rendu en double résolution (4 fois moins de pixels à dessiner)
+    RES = 1;
+    rebuildAssets();
+  } else if (!fxLow) { // 2e palier : moins de lueurs et de particules
+    fxLow = true;
+  } else {
+    return;
+  }
+  slowAvg = 16.7;
+  slowCount = 0;
+  toast('Jeu allégé automatiquement pour rester fluide');
+}
+function governQuality(now) {
+  const dt = now - lastDrawAt;
+  lastDrawAt = now;
+  if (dt <= 0 || dt > 250) return; // onglet en arrière-plan ou pause : on ignore
+  slowAvg += (dt - slowAvg) * 0.05;
+  if (slowAvg > 24) { if (++slowCount > 150) lighten(); } else slowCount = Math.max(0, slowCount - 2);
+}
+
 function draw() {
   requestAnimationFrame(draw);
   drawPreview();
   if (!level || !world) return;
   frame++;
+  governQuality(performance.now());
   const T = level.tile;
   const L = level.L;
   const W = LW;
@@ -2381,10 +2479,15 @@ function draw() {
   ctx.globalCompositeOperation = 'source-over';
 
   // état des portes, volets, glace et bois brûlé : sert aux ombres et à la visée
-  L.open = new Set(world.open);
-  L.shutOpen = new Set(world.sh);
-  L.ice = new Set(world.ice.map((b) => b[1] * L.w + b[0]));
-  L.burnt = new Set(world.bt);
+  // (calculés une seule fois par message du serveur, pas à chaque image)
+  const S = world.sets || (world.sets = {
+    open: new Set(world.open), shut: new Set(world.sh), pressed: new Set(world.pressed), burnt: new Set(world.bt),
+    burning: new Set(world.bn), ice: new Set(world.ice.map((b) => b[1] * L.w + b[0])),
+  });
+  L.open = S.open;
+  L.shutOpen = S.shut;
+  L.ice = S.ice;
+  L.burnt = S.burnt;
 
   // fond en profondeur : suit doucement la position moyenne des joueurs
   let mx = 0;
@@ -2395,13 +2498,13 @@ function draw() {
   window.Themes.drawBackground(ctx, level.bg, level.shift);
   window.Themes.drawDecor(ctx, theme, level.decor, frame, W, H);
   ctx.drawImage(level.tiles, 0, 0, W, H);
-  window.Themes.drawTileFx(ctx, level.tiles, frame);
+  if (!fxLow) window.Themes.drawTileFx(ctx, level.tiles, frame);
 
-  const openSet = new Set(world.open);
-  const pressedSet = new Set(world.pressed);
-  const shutSet = new Set(world.sh);
-  const burntSet = new Set(world.bt);
-  const burningSet = new Set(world.bn);
+  const openSet = S.open;
+  const pressedSet = S.pressed;
+  const shutSet = S.shut;
+  const burntSet = S.burnt;
+  const burningSet = S.burning;
 
   // Sources de lumière (niveaux sombres) : tout le monde a une petite lueur, le Mage éclaire plus loin
   const lights = [];
