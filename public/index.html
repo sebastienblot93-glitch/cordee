@@ -191,6 +191,25 @@
     button.act { border-radius: 12px; box-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
     #chapter-card, #help .card { border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
     @media (prefers-reduced-motion: reduce) { h1 { animation: none; } }
+
+    /* Équipe : échange de rôles, emotes et messages en jeu */
+    #teambar { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; align-items: center; margin-top: .6rem; }
+    #teambar:empty { display: none; }
+    #teambar .sep { width: 2px; height: 26px; background: rgba(255, 255, 255, .12); border-radius: 2px; }
+    button.team {
+      padding: .4rem .8rem; font-size: .8rem; background: var(--night-2); color: var(--chalk);
+      border: 2px solid #4a4a8a; box-shadow: 0 3px 0 rgba(0, 0, 0, .3); line-height: 1.2;
+    }
+    button.team small { color: var(--muted); font-family: 'Nunito', sans-serif; font-size: .7rem; margin-left: .25rem; }
+    button.team.swap { border-color: var(--accent); }
+    button.team.emo { font-size: 1.15rem; padding: .25rem .6rem; }
+    button.team:disabled { opacity: .45; cursor: not-allowed; }
+    #toast {
+      position: absolute; left: 50%; top: 10px; transform: translate(-50%, -14px); opacity: 0; pointer-events: none; z-index: 5;
+      padding: .45rem 1rem; border-radius: 999px; background: rgba(13, 13, 38, .9); border: 2px solid var(--accent);
+      font-family: 'Silkscreen', monospace; font-size: .85rem; color: var(--chalk); white-space: nowrap; transition: opacity .25s, transform .25s;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
   </style>
 </head>
 <body>
@@ -258,6 +277,7 @@
     <div id="game-wrap">
       <canvas id="canvas"></canvas>
       <div id="banner">Niveau réussi !</div>
+      <div id="toast"></div>
       <div id="chapter-card">
         <div id="chapter-num" class="num"></div>
         <div id="chapter-name" class="name"></div>
@@ -269,6 +289,7 @@
       <div id="under-main">
         <p id="level-hint" class="hint"></p>
         <div id="actionbar"></div>
+        <div id="teambar"></div>
         <p id="move-help" class="hint"></p>
         <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>M</kbd> coupe le son<button id="btn-help" class="ghost" type="button">Aide (H)</button></p>
       </div>
