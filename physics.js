@@ -28,7 +28,8 @@
   };
 
   // Capacités par rôle. En dehors des niveaux "Arcanes", tout le monde est "plain".
-  const KITS = { plain: {}, mage: {}, archer: { doubleJump: true, dash: true } };
+  // Tout le monde peut faire un dash (Maj) ; l'Archer garde en plus le double saut
+  const KITS = { plain: { dash: true }, mage: { dash: true }, archer: { doubleJump: true, dash: true } };
 
   // Légende des niveaux :
   //   #  bloc solide              .  vide
