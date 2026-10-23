@@ -230,7 +230,8 @@ function releaseCarry(room, p) {
 
 function grab(room, me) {
   const L = room.level;
-  if (room.status !== 'playing' || !L.cfg.carry || me.carriedBy) return;
+  if (room.status !== 'playing' || me.carriedBy) return;
+  if (!L.cfg.carry) return send(me.ws, { t: 'nograb', why: 'level' });
   if (me.carrying) { // 2e appui : on lance
     const q = dropCarried(room, me, (me.face || 1) * COOP.throwVx, COOP.throwVy);
     if (q) room.events.push(['throw', Math.round(q.x), Math.round(q.y)]);
@@ -246,7 +247,8 @@ function grab(room, me) {
     if (dx > COOP.grabReach || dy < -PH - 8 || dy > 10) continue;
     if (dx + Math.abs(dy) < bd) { bd = dx + Math.abs(dy); best = q; }
   }
-  if (!best || hitsTile(L, me.x, me.y - PH)) return; // personne à portée, ou plafond trop bas
+  if (!best) return send(me.ws, { t: 'nograb', why: 'far' }); // personne à portée
+  if (hitsTile(L, me.x, me.y - PH)) return send(me.ws, { t: 'nograb', why: 'ceiling' }); // plafond trop bas
   me.carrying = best.id;
   best.carriedBy = me.id;
   best.vx = 0;

@@ -27,7 +27,7 @@
     linkBack: 192, // ... et reviennent quand ils se rapprochent à moins de 6 cases (évite le clignotement)
     syncWindow: 20, // sauts synchronisés (s) : les deux joueurs doivent sauter à moins de 1/3 de seconde d'écart
     syncHold: 360, // ... les blocs apparaissent alors pendant 6 secondes
-    grabReach: 40, // porter : distance maximale entre les deux joueurs
+    grabReach: 56, // porter : distance maximale entre les deux joueurs
     throwVx: 6.5, throwVy: -11, // lancer
     aimTol: 9, // tolérance de visée : un tir touche un cristal ou une cible à 9 px près
   };
