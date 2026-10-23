@@ -7,6 +7,8 @@
 //           x y z cristaux (orbe du Mage) | o p q cibles (flèche de l'Archer)
 //           w v u volets en rythme | h bloc caché | r zone de rune (glace du Mage)
 //           j ressort | t bois (brûlé par la flèche de feu) | f g e torches des groupes 1 2 3
+//           l bloc lié (disparaît si les joueurs s'éloignent de plus de 7 cases)
+//           s pont synchro (apparaît 6 s quand les deux joueurs sautent en même temps)
 //
 // Options d'un niveau (4e argument de make) :
 //   abilities : true  -> rôles Mage / Archer actifs (sinon tout le monde est identique)
@@ -19,6 +21,10 @@
 //   labels    : indices peints dans le décor
 //   fire      : true  -> l'Archer dispose de la flèche de feu (bouton Feu / clic droit / K)
 //   swap      : true  -> le Mage dispose de l'éclair d'échange (bouton Échange / touche E)
+//   link      : true  -> niveau avec blocs liés : fil visible entre les joueurs et jauge de distance
+//   sync      : true  -> niveau avec ponts synchro : il faut sauter en même temps
+//   carry     : true  -> on peut porter (F) puis lancer (F) son coéquipier
+//   heavy     : [1]   -> la plaque du groupe 1 exige deux joueurs dessus
 //
 // Repères de saut : seul, on monte de 2 cases. À deux (l'un sur la tête de l'autre) de 3 cases.
 // L'Archer, avec son double saut, monte de 5 cases et franchit environ 15 cases de vide avec le dash.
@@ -42,7 +48,7 @@ function make(name, hint, draw, opts = {}) {
 }
 
 const LEVELS = [
-  /* ===== Chapitre 1 : en équipe, sans pouvoirs (2 niveaux d'initiation) ===== */
+  /* ===== Chapitre 1 : en équipe, sans pouvoirs (porter, lancer, rester liés) ===== */
   make('Échauffement', 'Ramassez la clé tout en haut, puis rejoignez tous la porte.', ({ rect, put }) => {
     [[5, 12], [11, 10], [17, 8], [23, 6]].forEach(([x, y]) => rect(x, y, 4, 1));
     put(24, 5, 'K');
@@ -59,6 +65,29 @@ const LEVELS = [
     put(2, 13, 'S');
   }),
 
+  make('Courte-échelle', 'Une corniche trop haute, même sur la tête de l’autre ! Placez-vous contre votre coéquipier, appuyez sur F pour le porter, puis F encore pour le lancer sur la corniche. Là-haut, il pèse sur la plaque pour ouvrir la grande porte. Deuxième lancer pour la clé !', ({ rect, put }) => {
+    rect(6, 10, 5, 1); // corniche à 4 cases : la tête de l'autre ne suffit pas
+    put(9, 9, '1'); // plaque sur la corniche
+    rect(14, 1, 1, 13, 'a'); // grande porte
+    rect(20, 10, 7, 1); // 2e corniche (large : le lancer porte loin)
+    put(23, 9, 'K');
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, { carry: true, latch: { 1: 600 } }),
+
+  make('La corde', 'Un fil magique vous relie : les blocs verts disparaissent si vous vous éloignez de plus de 7 cases (le fil vire au rouge avant la rupture). Avancez ensemble. Un joueur tient la plaque pour ouvrir la porte, l’autre passe : attendez-vous, puis rattrapez-vous vite !', ({ rect, put }) => {
+    rect(3, 14, 24, 1, '^'); // fosse de pics
+    rect(4, 12, 3, 1, 'l');
+    rect(9, 11, 3, 1, 'l');
+    rect(14, 10, 3, 1, 'l');
+    put(14, 9, 'C');
+    put(15, 9, '1'); // plaque : ouvre la porte
+    rect(18, 1, 1, 13, 'a');
+    rect(20, 11, 3, 1, 'l');
+    rect(24, 12, 3, 1, 'l');
+    put(28, 13, 'D');
+    put(2, 13, 'S');
+  }, { link: true, latch: { 1: 300 } }),
 
   /* ===== Chapitre 2 : Arcanes, un Mage et un Archer ===== */
   make('L’étincelle', 'Le Mage choisit l’Orbe (bouton sous le jeu), puis clique sur le cristal pour le toucher. L’Archer, lui, saute deux fois pour atteindre la clé.', ({ rect, put }) => {
@@ -92,18 +121,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true }),
 
-  make('L’escalier de glace', 'Le Mage bâtit un escalier de glace (bouton Glace, puis clic sur les runes) pour atteindre la clé tout en haut. L’Archer tire sur la cible en haut à droite pour ouvrir la porte de sortie.', ({ rect, put }) => {
-    put(7, 12, 'r');
-    put(10, 10, 'r');
-    put(13, 8, 'r');
-    rect(16, 7, 5, 1); // grande corniche tout en haut
-    put(18, 6, 'K');
-    put(24, 5, 'o'); // cible de l'Archer
-    rect(26, 1, 1, 13, 'a'); // porte devant la sortie
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 0 } }),
-
+  /* ===== Chapitre 3 : Ténèbres ===== */
   make('Dans le noir', 'Seul le Mage éclaire. Le Mage ouvre la porte de départ, puis des plateformes invisibles traversent les pics : l’Archer saute deux fois pour prendre la clé tout en haut.', ({ rect, put }) => {
     rect(5, 14, 20, 1, '^');
     rect(4, 1, 1, 13, 'a'); // porte de départ
@@ -121,43 +139,23 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, dark: true, hold: { 1: 0 } }),
 
-  make('Le va-et-vient', 'Le Mage ouvre la porte (orbe sur le cristal). Seul l’Archer peut sauter de pilier en pilier chercher la clé et revenir. Rendez-vous à la porte de départ.', ({ rect, put }) => {
-    rect(5, 14, 17, 1, '^'); // fosse de pics
-    rect(5, 1, 1, 13, 'a'); // porte entre la rive de départ et la fosse
-    put(2, 4, 'x'); // cristal du Mage
-    rect(8, 10, 1, 4); // piliers à 4 cases de haut
-    rect(13, 10, 1, 4);
-    rect(18, 10, 1, 4);
-    put(18, 9, 'K');
-    put(3, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 0 } }),
-
-  make('Le judas', 'Le Mage monte sur les marches, puis tire une orbe dans le judas du mur pour ouvrir la porte. L’Archer file chercher la clé de l’autre côté.', ({ rect, put }) => {
-    rect(3, 12, 3, 1); // marches de 2 cases
-    rect(7, 10, 3, 1);
-    rect(15, 1, 2, 13); // mur
-    rect(15, 4, 2, 3, '.'); // judas de 3 cases, trop haut pour passer à pied
-    rect(15, 7, 2, 7, 'a'); // porte au pied du mur
-    put(18, 4, 'x'); // cristal derrière le mur
-    rect(22, 10, 4, 1); // corniche à 4 cases : double saut de l'Archer
-    put(23, 9, 'K');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 0 } }),
-
-  make('Tir d’adresse', 'La flèche doit passer par la meurtrière quand le volet s’ouvre. Visez et tirez en plein saut.', ({ rect, put }) => {
-    rect(18, 1, 2, 13); // grand mur
-    rect(18, 6, 2, 1, 'w'); // meurtrière à volet
-    rect(18, 9, 2, 5, 'a'); // porte au pied du mur
-    put(23, 6, 'o'); // cible derrière le mur
-    put(22, 2, 'y'); // cristal du Mage
-    rect(26, 6, 1, 8, 'b');
+  make('Le fil d’Ariane', 'Dans le noir, des blocs liés forment le chemin : restez près de la lumière du Mage, ils disparaissent si vous vous éloignez. Le Mage touche le cristal pour ouvrir la porte. L’Archer saute deux fois pour prendre la clé tout là-haut.', ({ rect, put }) => {
+    rect(3, 14, 24, 1, '^');
+    rect(4, 12, 3, 1, 'l');
+    rect(9, 11, 3, 1, 'l');
+    put(10, 8, 'x'); // cristal du Mage
+    rect(14, 1, 1, 13, 'a');
+    rect(16, 11, 3, 1, 'l');
+    put(17, 10, 'C');
+    rect(21, 10, 3, 1, 'l');
+    rect(24, 7, 3, 1, 'l'); // trop haut pour le Mage : double saut de l'Archer
+    put(25, 6, 'K');
     put(28, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, shutters: { 1: { period: 150, open: 40, phase: 0 } } }),
+  }, { abilities: true, dark: true, link: true, hold: { 1: 0 } }),
 
-  make('Le sceau', 'Un indice n’apparaît que pour l’Archer. Le Mage doit toucher les trois cristaux dans le bon ordre.', ({ rect, put }) => {
+  /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
+  make('Le sceau', 'Casse-tête : un indice n’apparaît que pour l’Archer (sur la corniche). Il le dicte au Mage, qui touche les trois cristaux dans le bon ordre.', ({ rect, put }) => {
     rect(2, 10, 3, 1); // corniche à 4 cases : l'Archer y lit l'indice
     put(4, 8, 'z');
     put(15, 4, 'z');
@@ -169,7 +167,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, {
     abilities: true,
-    sequence: { group: 3, order: [2, 0, 1], timeout: 900 },
+    sequence: { group: 3, order: [2, 0, 1], timeout: 1800 },
     labels: [{ tx: 3, ty: 8, shapes: [2, 0, 1], role: 'archer', radius: 130 }],
   }),
 
@@ -188,7 +186,37 @@ const LEVELS = [
     put(25, 9, 'K');
     put(28, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, and: [1], latch: { 1: 300 }, hold: { 1: 100 }, shutters: { 1: { period: 120, open: 45, phase: 0 } } }),
+  }, { abilities: true, and: [1], latch: { 1: 300 }, hold: { 1: 240 }, shutters: { 1: { period: 150, open: 80, phase: 0 } } }),
+
+  make('Le grand saut', 'Sautez TOUS LES DEUX EN MÊME TEMPS (moins d’une seconde d’écart) : un pont et un escalier dorés apparaissent 6 secondes au-dessus des pics. Courez jusqu’à la clé ! Si vous tombez, recommencez le saut ensemble.', ({ rect, put }) => {
+    rect(4, 14, 22, 1, '^');
+    rect(5, 12, 9, 1, 's'); // 1er pont
+    rect(14, 12, 3, 1); // îlot
+    put(15, 11, 'C');
+    rect(17, 11, 2, 1, 's'); // escalier doré
+    rect(19, 10, 2, 1, 's');
+    rect(21, 9, 2, 1, 's');
+    rect(23, 8, 2, 1, 's');
+    rect(25, 8, 4, 1); // plateau
+    put(27, 7, 'K');
+    put(28, 13, 'D');
+    put(2, 13, 'S');
+  }, { sync: true }),
+
+  make('Le relais', 'Casse-tête à deux : une plaque ne reste pressée que tant qu’on est dessus. L’un tient la plaque du bas pour laisser passer l’autre, qui ouvre à son tour la porte du haut. À la fin, posez-vous chacun sur une plaque.', ({ rect, put }) => {
+    put(7, 13, '1'); // plaque du bas : ouvre la porte du couloir bas
+    rect(4, 12, 3, 1); // escalier vers le couloir du haut
+    rect(8, 10, 3, 1);
+    rect(12, 8, 8, 1); // plancher entre les deux couloirs
+    rect(15, 9, 1, 5, 'a'); // porte du couloir bas
+    rect(15, 1, 1, 7, 'b'); // porte du couloir haut
+    put(21, 13, '2'); // plaque de la zone d'arrivée : ouvre la porte du haut
+    put(23, 13, '3'); // deux plaques éloignées : il faut être deux, une chacune
+    put(26, 13, '3');
+    rect(27, 1, 1, 13, 'c');
+    put(28, 13, 'D');
+    put(1, 13, 'S');
+  }, { and: [3], latch: { 3: 150 } }),
 
   /* ===== Chapitre 5 : Jardins suspendus (ressorts) ===== */
   make('Tremplin', 'Le ressort propulse très haut : retombez dessus pour atteindre la clé. Le Mage ouvre la porte rose (orbe sur le cristal), l’Archer baisse la porte bleue (flèche sur la cible).', ({ rect, put }) => {
@@ -236,22 +264,6 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, hold: { 1: 600, 2: 600 } }),
 
-  make('Jardin secret', 'Trois cristaux à toucher dans le bon ordre, que seul l’Archer peut lire près du départ. Le Mage tire, l’Archer ouvre la dernière porte par la cible.', ({ rect, put }) => {
-    put(3, 13, 'j');
-    rect(5, 8, 3, 1);
-    put(10, 13, 'j');
-    rect(12, 8, 3, 1);
-    put(14, 7, 'K');
-    put(4, 4, 'z');
-    put(11, 2, 'z');
-    put(16, 10, 'z');
-    rect(18, 1, 1, 13, 'c');
-    put(22, 9, 'o');
-    rect(25, 1, 1, 13, 'a');
-    put(28, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 0 }, sequence: { group: 3, order: [1, 0, 2], timeout: 1200 }, labels: [{ tx: 1, ty: 10, shapes: [1, 0, 2], role: 'archer', radius: 130 }] }),
-
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
   make('Premier feu', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Le Mage touche le cristal, puis l’Archer allume la torche.', ({ rect, put }) => {
     rect(10, 1, 2, 13, 't'); // mur de bois : tout le bois relié brûle
@@ -275,28 +287,24 @@ const LEVELS = [
     put(27, 13, 'K');
     put(28, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, fire: true, and: [1], latch: { 1: 420 }, hold: { 1: 420 } }),
+  }, { abilities: true, fire: true, and: [1], latch: { 1: 600 }, hold: { 1: 600 } }),
 
-  make('La fournaise', 'Dans le noir, trois portes à torche. L’Archer allume, le Mage éclaire et touche le dernier cristal. Le bois cache la dernière flamme.', ({ rect, put }) => {
-    rect(5, 14, 3, 1, '^');
-    put(8, 13, 'C');
-    put(7, 9, 'f');
-    rect(9, 1, 1, 13, 'a');
-    rect(11, 14, 5, 1, '^');
-    put(12, 12, 'h');
-    put(13, 12, 'h');
-    put(15, 11, 'h');
-    put(16, 11, 'h');
-    put(16, 7, 'g');
-    rect(17, 1, 1, 13, 'b');
-    rect(20, 1, 2, 13, 't');
-    put(22, 9, 'e');
-    put(23, 3, 'z');
-    rect(24, 1, 1, 13, 'c');
-    put(27, 13, 'K');
+  make('Pont de braise', 'Le fil vous relie : restez proches ! L’Archer brûle le mur de bois (bouton Feu) puis allume la torche ; le Mage touche le cristal avec l’orbe. Les deux portes s’ouvrent alors.', ({ rect, put }) => {
+    rect(3, 14, 22, 1, '^');
+    rect(4, 12, 3, 1, 'l');
+    rect(9, 11, 3, 1, 'l');
+    rect(13, 1, 2, 13, 't'); // mur de bois
+    rect(16, 11, 3, 1, 'l');
+    put(17, 10, 'C');
+    rect(20, 10, 3, 1, 'l');
+    put(22, 7, 'f'); // torche de l'Archer
+    put(20, 6, 'y'); // cristal du Mage
+    rect(23, 11, 2, 1, 'l');
+    rect(25, 1, 1, 13, 'a');
+    rect(26, 1, 1, 13, 'b');
     put(28, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, fire: true, dark: true, and: [3], hold: { 1: 0, 2: 0, 3: 600 }, latch: { 3: 400 } }),
+  }, { abilities: true, fire: true, link: true, hold: { 1: 0, 2: 0 } }),
 
   make('Brasier', 'Un pont de glace pour le Mage, un mur de bois pour l’Archer, une clé haut perchée. Torche et cristal ouvrent la dernière porte.', ({ rect, put }) => {
     rect(10, 1, 2, 13, 't');
@@ -370,11 +378,11 @@ const LEVELS = [
 
 // Chapitres : thème graphique, texte d'introduction et nombre de niveaux (dans l'ordre de LEVELS)
 const CHAPTERS = [
-  { name: 'La prairie', theme: 'prairie', count: 2, blurb: 'Pas de pouvoirs ici : apprenez à vous porter, à vous pousser et à coopérer.' },
-  { name: 'Les Arcanes', theme: 'arcane', count: 4, blurb: 'Un Mage, un Archer : chacun son pouvoir, et personne ne s’en sort seul.', powers: ['Mage : orbe sur les cristaux, glace sur les runes', 'Archer : flèche sur les cibles, double saut, dash'] },
-  { name: 'Les Ténèbres', theme: 'dark', count: 2, blurb: 'Le noir est total. Seule la lumière du Mage montre le chemin.' },
-  { name: 'Le Sanctuaire', theme: 'sanctuary', count: 4, blurb: 'Précision, timing, ordre des cristaux : le temple teste votre synchronisation.' },
-  { name: 'Les Jardins suspendus', theme: 'garden', count: 4, blurb: 'Des ressorts jaillissent des fleurs. Attention aux pics en bas !', powers: ['Ressort : retombez dessus pour être propulsé à 6 cases'] },
+  { name: 'La prairie', theme: 'prairie', count: 4, blurb: 'Pas de pouvoirs ici : portez-vous, lancez-vous, restez liés par le fil. Ici, tout se joue à deux.', powers: ['F : porter ton coéquipier, puis F encore pour le lancer', 'Blocs verts liés : ils disparaissent si vous vous éloignez de plus de 7 cases'] },
+  { name: 'Les Arcanes', theme: 'arcane', count: 3, blurb: 'Un Mage, un Archer : chacun son pouvoir, et personne ne s’en sort seul. Les tirs n’ont pas besoin d’être parfaits.', powers: ['Mage : orbe sur les cristaux, glace sur les runes', 'Archer : flèche sur les cibles, double saut, dash'] },
+  { name: 'Les Ténèbres', theme: 'dark', count: 2, blurb: 'Le noir est total. Seule la lumière du Mage montre le chemin, et le fil vous garde ensemble.' },
+  { name: 'Le Sanctuaire', theme: 'sanctuary', count: 4, blurb: 'Sauts synchronisés, casse-têtes, ordre des cristaux : le temple teste votre coordination.', powers: ['Ponts dorés : sautez tous les deux en même temps pour les faire apparaître'] },
+  { name: 'Les Jardins suspendus', theme: 'garden', count: 3, blurb: 'Des ressorts jaillissent des fleurs. Attention aux pics en bas !', powers: ['Ressort : retombez dessus pour être propulsé à 6 cases'] },
   { name: 'La Forge', theme: 'forge', count: 4, blurb: 'Le bois brûle, les torches s’allument. Mais attention : le feu se propage à tout le bois relié.', powers: ['Archer : bouton Feu, puis clic dans le jeu (brûle le bois, allume les torches)'] },
   { name: 'Les Brumes', theme: 'mist', count: 4, blurb: 'Le brouillard efface les distances. Il faudra échanger vos places.', powers: ['Mage : bouton Échange, puis clic sur l’autre joueur (vous échangez vos places)'] },
 ];
@@ -389,13 +397,13 @@ CHAPTERS.forEach((ch, i) => {
 // Un niveau absent du tableau reçoit DEFAULT_TIMER ; mettre 0 désactive le minuteur de ce niveau.
 const DEFAULT_TIMER = 120;
 const TIMERS = {
-  'Échauffement': 90, 'Le mur': 60, // chapitre 1 : la prairie
-  'L’étincelle': 90, 'Le tireur': 90, 'Le gouffre': 90, 'L’escalier de glace': 90, // chapitre 2 : les Arcanes
-  'Dans le noir': 120, 'Le va-et-vient': 90, // chapitre 3 : les Ténèbres
-  'Le judas': 90, 'Tir d’adresse': 90, 'Le sceau': 90, 'Synchro': 100, // chapitre 4 : le Sanctuaire
-  'Tremplin': 90, 'Haute voltige': 100, 'Nénuphars': 100, 'Jardin secret': 100, // chapitre 5 : les Jardins
-  'Premier feu': 100, 'Les quatre feux': 110, 'La fournaise': 120, 'Brasier': 120, // chapitre 6 : la Forge
-  'Échange': 100, 'Le pilier': 100, 'Brouillard': 130, 'Cordée': 150, // chapitre 7 : les Brumes
+  'Échauffement': 120, 'Le mur': 90, 'Courte-échelle': 150, 'La corde': 150, // chapitre 1 : la prairie
+  'L’étincelle': 120, 'Le tireur': 120, 'Le gouffre': 120, // chapitre 2 : les Arcanes
+  'Dans le noir': 150, 'Le fil d’Ariane': 180, // chapitre 3 : les Ténèbres
+  'Le sceau': 150, 'Synchro': 150, 'Le grand saut': 150, 'Le relais': 180, // chapitre 4 : le Sanctuaire
+  'Tremplin': 120, 'Haute voltige': 130, 'Nénuphars': 130, // chapitre 5 : les Jardins
+  'Premier feu': 130, 'Les quatre feux': 150, 'Pont de braise': 180, 'Brasier': 150, // chapitre 6 : la Forge
+  'Échange': 130, 'Le pilier': 130, 'Brouillard': 160, 'Cordée': 200, // chapitre 7 : les Brumes
 };
 LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 

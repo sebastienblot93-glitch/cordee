@@ -4,7 +4,7 @@ const path = require('path');
 const { WebSocketServer } = require('ws');
 const { LEVELS, CHAPTERS } = require('./levels');
 const {
-  TILE, PW, PH, SPELL, ICE_PAD, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
+  TILE, PW, PH, SPELL, ICE_PAD, COOP, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
   touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick, woodCluster,
 } = require('./physics');
 
@@ -88,13 +88,42 @@ function updateWorld(room, list) {
   }
   L.shutOpen = shutOpen;
 
+  // Blocs liés : ils existent tant que tous les joueurs restent proches les uns des autres
+  let far = 0;
+  for (let i = 0; i < list.length; i++) {
+    for (let j = i + 1; j < list.length; j++) far = Math.max(far, Math.hypot(list[i].x - list[j].x, list[i].y - list[j].y));
+  }
+  if (room.linkOn && far > COOP.linkDist) room.linkOn = false;
+  else if (!room.linkOn && far < COOP.linkBack) room.linkOn = true;
+  room.linkDist = far;
+  L.linkOn = room.linkOn;
+
+  // Ponts synchro : les deux joueurs ont sauté presque en même temps
+  if (cfg.sync && list.length >= 2 && room.syncUntil <= t && list.every((p) => t - p.jumpAt <= COOP.syncWindow)) {
+    room.syncUntil = t + COOP.syncHold;
+    room.events.push(['sync', Math.round(list[0].x), Math.round(list[0].y)]);
+  }
+  L.syncOn = t < room.syncUntil;
+
   // Déclencheurs de chaque groupe : plaques pressées, cristaux et cibles encore allumés
   const trig = { 1: [], 2: [], 3: [] };
   const pressed = new Set();
+  const heavy = cfg.heavy || []; // plaques lourdes : il faut être deux dessus (ou sur les plaques voisines du même groupe)
+  const heavyTouch = { 1: new Set(), 2: new Set(), 3: new Set() };
   for (const plate of L.plates) {
+    if (heavy.includes(plate.group)) {
+      for (const p of list) if (touchesRect(p, plate)) heavyTouch[plate.group].add(p.id);
+      continue;
+    }
     const on = list.some((p) => touchesRect(p, plate));
     trig[plate.group].push(on);
     if (on) pressed.add(plate.group);
+  }
+  for (const g of heavy) {
+    if (!L.plates.some((pl) => pl.group === g)) continue;
+    const on = heavyTouch[g].size >= Math.min(2, list.length);
+    trig[g].push(on);
+    if (on) pressed.add(g);
   }
   L.crystals.forEach((c, i) => {
     if (c.seqIndex < 0) trig[c.group].push(t < room.crystalUntil[i]);
@@ -172,6 +201,60 @@ function stepBurn(room) {
   });
 }
 
+/* ---------- Porter et lancer son coéquipier ---------- */
+// Lâche le porteur (ou le porté) de p ; vx, vy : élan donné au porté
+function dropCarried(room, carrier, vx, vy) {
+  const q = room.players.get(carrier.carrying);
+  carrier.carrying = null;
+  carrier.grabCd = room.time + 20;
+  if (q) {
+    q.carriedBy = null;
+    q.vx = vx;
+    q.vy = vy;
+    q.onGround = false;
+    q.airJump = true;
+    q.dashAvail = true;
+    q.grabCd = room.time + 20;
+  }
+  return q;
+}
+
+function releaseCarry(room, p) {
+  if (p.carrying) dropCarried(room, p, 0, 0);
+  if (p.carriedBy) {
+    const c = room.players.get(p.carriedBy);
+    if (c && c.carrying === p.id) dropCarried(room, c, 0, 0);
+    p.carriedBy = null;
+  }
+}
+
+function grab(room, me) {
+  const L = room.level;
+  if (room.status !== 'playing' || !L.cfg.carry || me.carriedBy) return;
+  if (me.carrying) { // 2e appui : on lance
+    const q = dropCarried(room, me, (me.face || 1) * COOP.throwVx, COOP.throwVy);
+    if (q) room.events.push(['throw', Math.round(q.x), Math.round(q.y)]);
+    return;
+  }
+  if (room.time < me.grabCd) return;
+  let best = null;
+  let bd = Infinity;
+  for (const q of room.players.values()) {
+    if (q === me || q.carrying || q.carriedBy || room.time < q.grabCd) continue;
+    const dx = Math.abs(q.x - me.x);
+    const dy = q.y - me.y;
+    if (dx > COOP.grabReach || dy < -PH - 8 || dy > 10) continue;
+    if (dx + Math.abs(dy) < bd) { bd = dx + Math.abs(dy); best = q; }
+  }
+  if (!best || hitsTile(L, me.x, me.y - PH)) return; // personne à portée, ou plafond trop bas
+  me.carrying = best.id;
+  best.carriedBy = me.id;
+  best.vx = 0;
+  best.vy = 0;
+  best.dashT = 0;
+  room.events.push(['grab', Math.round(best.x), Math.round(best.y)]);
+}
+
 /* ---------- Clés, porte, pièges ---------- */
 function collectKeys(room, list) {
   room.level.keys.forEach((k, i) => {
@@ -196,6 +279,7 @@ function allInDoor(room, list) {
 }
 
 function respawn(room, p) {
+  releaseCarry(room, p);
   const r = room.respawn;
   p.x = r.x;
   p.y = r.y;
@@ -323,6 +407,10 @@ function resetPlayers(room) {
     p.cd = [0, 0, 0];
     p.jumpPending = false;
     p.dashPending = false;
+    p.carrying = null;
+    p.carriedBy = null;
+    p.grabCd = 0;
+    p.jumpAt = -999;
     i++;
   }
 }
@@ -382,6 +470,10 @@ function startMsg(room) {
       swap: !!def.swap,
       seqGroup: def.sequence ? def.sequence.group : 0,
       labels: def.labels || [],
+      link: !!def.link,
+      sync: !!def.sync,
+      carry: !!def.carry,
+      heavy: def.heavy || [],
     },
   };
 }
@@ -406,6 +498,9 @@ function freshRoomState(room, index) {
   room.burn = [];
   room.events = [];
   room.seq = { progress: 0, done: false, flash: 0, lastHit: 0 };
+  room.linkOn = true;
+  room.linkDist = 0;
+  room.syncUntil = 0;
 }
 
 function loadLevel(room, index) {
@@ -465,6 +560,11 @@ function stateMsg(room, list) {
       Math.max(0, Math.min(1, p.dashCd / 40)),
       cdRatio(p.cd[2], SPELL.cdSwap),
     ]),
+    lk: room.linkOn ? 1 : 0, // blocs liés présents
+    ld: Math.round((room.linkDist / COOP.linkDist) * 100) / 100, // distance entre joueurs / distance maximale
+    sy: Math.max(0, room.syncUntil - t), // ticks restants des ponts synchro
+    jw: list.map((p) => Math.max(0, COOP.syncWindow - (t - p.jumpAt))), // fenêtre de saut synchro encore ouverte
+    cy: list.filter((p) => p.carriedBy).map((p) => [p.carriedBy, p.id]),
     deaths: room.deaths,
     tl: room.limit ? Math.max(0, Math.ceil((room.limit - room.clock) / 60)) : 0, // secondes restantes
   };
@@ -476,14 +576,31 @@ function tick(room) {
   updateWorld(room, list);
 
   for (const p of list) {
+    if (p.carriedBy) { // porté : suit son porteur ; un saut le fait descendre
+      const c = room.players.get(p.carriedBy);
+      if (!c || c.carrying !== p.id) p.carriedBy = null;
+      else if (p.jumpPending) dropCarried(room, c, (c.face || 1) * 2, -7);
+      else { p.jumpPending = false; p.dashPending = false; continue; }
+    }
     unstick(L, p);
     p.input.jumpEdge = p.jumpPending;
-    p.input.dash = p.dashPending;
+    p.input.dash = p.dashPending && !p.carrying; // pas de dash en portant quelqu'un
     stepPlayer(L, p);
     p.jumpPending = false;
     p.dashPending = false;
     p.input.jumpEdge = false;
     p.input.dash = false;
+  }
+  for (const p of list) { // les portés se posent sur la tête de leur porteur (après son déplacement)
+    if (!p.carriedBy) continue;
+    const c = room.players.get(p.carriedBy);
+    if (!c) continue;
+    if (hitsTile(L, c.x, c.y - PH)) { dropCarried(room, c, 0, 0); continue; } // plafond : on le repose
+    p.x = c.x;
+    p.y = c.y - PH;
+    p.vy = 0;
+    p.vx = 0;
+    p.onGround = false;
   }
   resolvePlayers(L, list);
   collectKeys(room, list);
@@ -579,7 +696,7 @@ function addPlayer(room, ws, name, skin, wantColor) {
   const role = counts[0] <= counts[1] ? 'mage' : 'archer';
   const abilities = room.level.cfg.abilities;
   const player = Object.assign(newPlayerState(abilities ? role : 'plain'), {
-    id: ws.id, ws, name, color, role, skin: cleanSkin(skin), cd: [0, 0, 0], jumpPending: false, dashPending: false, jpSeen: 0,
+    id: ws.id, ws, name, color, role, skin: cleanSkin(skin), cd: [0, 0, 0], jumpPending: false, dashPending: false, jpSeen: 0, carrying: null, carriedBy: null, grabCd: 0, jumpAt: -999,
   });
   player.x = room.level.spawn.x;
   player.y = room.level.spawn.y;
@@ -592,6 +709,8 @@ function addPlayer(room, ws, name, skin, wantColor) {
 function removePlayer(ws) {
   const room = ws.room;
   if (!room) return;
+  const gone = room.players.get(ws.id);
+  if (gone) releaseCarry(room, gone);
   room.players.delete(ws.id);
   ws.room = null;
   if (room.players.size === 0) {
@@ -719,6 +838,7 @@ wss.on('connection', (ws) => {
         if (msg.jp !== undefined && msg.jp !== p.jpSeen) {
           p.jpSeen = msg.jp;
           p.jumpPending = true; // nouvelle pression de la touche saut (double saut)
+          p.jumpAt = room.time; // pour les ponts synchro
         }
         break;
       }
@@ -739,6 +859,11 @@ wss.on('connection', (ws) => {
       case 'dash': {
         const p = room && room.players.get(ws.id);
         if (p) p.dashPending = true;
+        break;
+      }
+      case 'grab': {
+        const p = room && room.players.get(ws.id);
+        if (p) grab(room, p);
         break;
       }
       case 'cast': {

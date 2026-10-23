@@ -21,9 +21,20 @@
     swap: { speed: 10, gravity: 0, life: 70 }, // éclair d'échange du Mage
   };
 
+  // Coopération
+  const COOP = {
+    linkDist: 224, // blocs liés (l) : ils disparaissent si deux joueurs sont à plus de 7 cases l'un de l'autre
+    linkBack: 192, // ... et reviennent quand ils se rapprochent à moins de 6 cases (évite le clignotement)
+    syncWindow: 20, // sauts synchronisés (s) : les deux joueurs doivent sauter à moins de 1/3 de seconde d'écart
+    syncHold: 360, // ... les blocs apparaissent alors pendant 6 secondes
+    grabReach: 40, // porter : distance maximale entre les deux joueurs
+    throwVx: 6.5, throwVy: -11, // lancer
+    aimTol: 9, // tolérance de visée : un tir touche un cristal ou une cible à 9 px près
+  };
+
   // Sorts : portée de la glace (px), durée (ticks), nombre max de blocs, recharges (ticks)
   const SPELL = {
-    reach: 224, iceLife: 480, iceMax: 3, cdOrb: 30, cdIce: 40, cdArrow: 25, defaultHold: 360,
+    reach: 224, iceLife: 600, iceMax: 3, cdOrb: 22, cdIce: 30, cdArrow: 20, defaultHold: 600,
     cdFire: 45, cdSwap: 150, burnDelay: 12, burnStep: 4,
   };
 
@@ -44,6 +55,8 @@
   //   ^  pics : un contact renvoie au dernier checkpoint
   //   j  ressort : un joueur qui retombe dessus est propulsé très haut
   //   t  bois : bloc solide que la flèche de feu de l'Archer brûle (et tout le bois relié)
+  //   l  bloc lié : solide seulement quand les joueurs restent proches (COOP.linkDist)
+  //   s  pont synchro : apparaît quelques secondes quand les joueurs sautent en même temps
   //   f g e  torches des groupes 1 2 3 : allumées par la flèche de feu, elles ouvrent leurs portes
   function parseLevel(def) {
     const rows = Array.isArray(def) ? def : def.rows;
@@ -60,6 +73,8 @@
     const wood = [];
     const spring = [];
     const torchAt = [];
+    const link = [];
+    const sync = [];
     const torches = [];
     const keys = [];
     const plates = [];
@@ -73,13 +88,15 @@
 
     rows.forEach((row, ty) => {
       solid[ty] = []; gate[ty] = []; shut[ty] = []; crystalAt[ty] = []; targetAt[ty] = [];
-      hidden[ty] = []; rune[ty] = []; wood[ty] = []; spring[ty] = []; torchAt[ty] = [];
+      hidden[ty] = []; rune[ty] = []; wood[ty] = []; spring[ty] = []; torchAt[ty] = []; link[ty] = []; sync[ty] = [];
       [...row].forEach((ch, tx) => {
         solid[ty][tx] = ch === '#' || ch === 'h';
         hidden[ty][tx] = ch === 'h';
         rune[ty][tx] = ch === 'r';
         wood[ty][tx] = ch === 't';
         spring[ty][tx] = ch === 'j';
+        link[ty][tx] = ch === 'l';
+        sync[ty][tx] = ch === 's';
         torchAt[ty][tx] = -1;
         gate[ty][tx] = ch >= 'a' && ch <= 'c' ? ch.charCodeAt(0) - 96 : 0;
         shut[ty][tx] = ch === 'w' ? 1 : ch === 'v' ? 2 : ch === 'u' ? 3 : 0;
@@ -92,7 +109,7 @@
         if (ch === 'K') keys.push({ x: px, y: py });
         if (ch === 'C') checkpoints.push({ x: px, y: py });
         if (ch === 'r') runes.push({ tx, ty });
-        if (ch === '^') spikes.push({ x: px + 3, y: py + 14, w: TILE - 6, h: TILE - 14 });
+        if (ch === '^') spikes.push({ x: px + 6, y: py + 18, w: TILE - 12, h: TILE - 18 }); // zone mortelle réduite : on frôle les pointes sans mourir
         if (ch >= '1' && ch <= '3') plates.push({ group: Number(ch), x: px, y: py + TILE - 8, w: TILE, h: 8 });
         if (ch === 'x' || ch === 'y' || ch === 'z') {
           crystalAt[ty][tx] = crystals.length;
@@ -117,7 +134,9 @@
     });
 
     return {
-      solid, gate, shut, crystalAt, targetAt, hidden, rune, wood, spring, torchAt,
+      solid, gate, shut, crystalAt, targetAt, hidden, rune, wood, spring, torchAt, link, sync,
+      linkOn: true, // blocs liés présents (le serveur le met à jour à chaque tick)
+      syncOn: false, // ponts synchro présents
       keys, plates, crystals, targets, torches, spikes, checkpoints, runes, door, spawn, w, h, cfg,
       burnt: new Set(), // blocs de bois brûlés (index ty * w + tx)
       open: new Set(), // numéros de portes ouvertes
@@ -136,6 +155,8 @@
     if (g && !L.open.has(g)) return true;
     const s = L.shut[ty][tx];
     if (s && !L.shutOpen.has(s)) return true;
+    if (L.linkOn && L.link[ty][tx]) return true;
+    if (L.syncOn && L.sync[ty][tx]) return true;
     return L.ice.size > 0 && L.ice.has(ty * L.w + tx);
   }
 
@@ -209,7 +230,7 @@
   function newPlayerState(kit) {
     return {
       kit: kit || 'plain', x: 0, y: 0, vy: 0, onGround: false, face: 1,
-      airJump: true, dashAvail: true, dashT: 0, dashDir: 1, dashCd: 0, jumpBuf: 0,
+      airJump: true, dashAvail: true, dashT: 0, dashDir: 1, dashCd: 0, jumpBuf: 0, vx: 0,
       input: { left: false, right: false, jump: false, jumpEdge: false, dash: false },
     };
   }
@@ -236,7 +257,14 @@
       return;
     }
 
-    moveAxis(L, p, 'x', dir * PHYS.speed);
+    // Élan d'un lancer (porter / lancer) : s'ajoute à la course, s'éteint en douceur et à l'atterrissage
+    let push = 0;
+    if (p.vx) {
+      push = p.vx;
+      p.vx *= 0.985;
+      if (Math.abs(p.vx) < 0.3) p.vx = 0;
+    }
+    if (moveAxis(L, p, 'x', dir * PHYS.speed + push) && p.vx) p.vx = 0;
 
     // Une pression de saut juste avant l'atterrissage est gardée en mémoire quelques ticks
     if (inp.jumpEdge) p.jumpBuf = 8;
@@ -256,6 +284,7 @@
         p.onGround = true;
         p.airJump = true;
         p.dashAvail = true;
+        p.vx = 0;
       }
       p.vy = 0;
     }
@@ -305,6 +334,8 @@
     };
   }
 
+  const AIM_PROBES = [[0, 0], [COOP.aimTol, 0], [-COOP.aimTol, 0], [0, COOP.aimTol], [0, -COOP.aimTol]];
+
   // Fait avancer un projectile d'un tick. Retourne null s'il vole encore, sinon l'événement :
   //   { type: 'crystal' | 'target', index } | { type: 'wall' | 'absorb' | 'expire' }
   function stepProjectile(L, pr) {
@@ -320,12 +351,18 @@
         return { type: 'wall' };
       }
       if (pr.kind === 'swap') continue; // l'éclair d'échange ne touche que les murs et les joueurs
-      const ci = L.crystalAt[ty][tx];
-      if (ci >= 0) return pr.kind === 'orb' ? { type: 'crystal', index: ci } : { type: 'absorb' };
-      const ti = L.targetAt[ty][tx];
-      if (ti >= 0) return pr.kind === 'arrow' || pr.kind === 'fire' ? { type: 'target', index: ti } : { type: 'absorb' };
-      const fi = L.torchAt[ty][tx];
-      if (fi >= 0 && pr.kind === 'fire') return { type: 'torch', index: fi };
+      // Cristaux, cibles et torches : on tolère COOP.aimTol pixels d'écart (la visée n'a pas besoin d'être parfaite)
+      for (const [ox, oy] of AIM_PROBES) {
+        const px = Math.floor((pr.x + ox) / TILE);
+        const py = Math.floor((pr.y + oy) / TILE);
+        if (py < 0 || px < 0 || py >= L.h || px >= L.w) continue;
+        const ci = L.crystalAt[py][px];
+        if (ci >= 0) return pr.kind === 'orb' ? { type: 'crystal', index: ci } : { type: 'absorb' };
+        const ti = L.targetAt[py][px];
+        if (ti >= 0) return pr.kind === 'arrow' || pr.kind === 'fire' ? { type: 'target', index: ti } : { type: 'absorb' };
+        const fi = L.torchAt[py][px];
+        if (fi >= 0 && pr.kind === 'fire') return { type: 'torch', index: fi };
+      }
     }
     pr.vy += spec.gravity;
     pr.life--;
@@ -355,6 +392,7 @@
         const a = list[i];
         const b = list[j];
         if (!overlap(a, b)) continue;
+        if (a.carriedBy === b.id || b.carriedBy === a.id) continue; // porté : pas de collision avec son porteur
 
         const top = a.y < b.y ? a : b;
         const bottom = top === a ? b : a;
@@ -434,7 +472,7 @@
   }
 
   const API = {
-    TILE, PW, PH, PHYS, PROJ, SPELL, KITS, ICE_PAD, woodCluster, onSpring,
+    TILE, PW, PH, PHYS, PROJ, SPELL, KITS, ICE_PAD, COOP, woodCluster, onSpring,
     parseLevel, tileSolid, hitsTile, gatesTouching, overlapsAnyBlocker, moveAxis,
     newPlayerState, stepPlayer, touchesRect, hitsSpikes,
     launchProjectile, stepProjectile, projectilePath, resolvePlayers, unstick,
