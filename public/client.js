@@ -69,11 +69,16 @@ function saveLook() {
 
 /* ---------- Musiques personnalisées par chapitre ---------- */
 // Pour donner une musique à un chapitre, ajoutez une ligne : nom du thème -> lecteur YouTube ou fichier mp3.
-//   { yt: 'IDENTIFIANT_DE_LA_VIDEO', title: 'Titre affiché' }   (lecteur officiel YouTube, visible sous le jeu)
+//   { yt: 'IDENTIFIANT_DE_LA_VIDEO', title: 'Titre affiché', start: 15 }   (lecteur officiel YouTube, visible sous le jeu ;
+//        start = seconde de départ, facultatif : la musique y revient à chaque démarrage et à chaque boucle)
 //   { src: 'music/mon-fichier.mp3', title: 'Titre affiché' }    (fichier à déposer dans public/music/)
 // Thèmes : prairie, arcane, dark, sanctuary, garden, forge, mist. Sans ligne, le chapitre garde sa musique intégrée.
 const CUSTOM_TRACKS = {
   prairie: { yt: 'oIUveqb6kSA', title: 'Indila x BENNETT · Dernière Danse (Techno Mix)' },
+  arcane: { yt: '2zdqymnZoHc', start: 15, title: 'Shy’m · Et Alors !' },
+  dark: { yt: 'VMUmA6YszKs', start: 48, title: 'Laura Ferré · Lucifer' },
+  sanctuary: { yt: 'kQWoeq1oAbc', title: 'AXMO x Aki Hiro · Castle In The Sky' },
+  garden: { yt: 'BtyHYIpykN0', start: 122, title: 'PNL · Au DD' },
 };
 const CUSTOM_VOLUME = 15; // 0 à 100 : volume de ces musiques (bas, pour ne pas couvrir les bruitages)
 
@@ -132,6 +137,7 @@ const Custom = {
     if (this.name === name) { this.sync(); return; }
     this.stop();
     this.name = name;
+    this.startAt = t.start || 0;
     $('yt-title').textContent = `♪ ${t.title || ''}`;
     $('yt-wrap').classList.add('show');
     if (t.src) {
@@ -148,13 +154,19 @@ const Custom = {
     const make = () => {
       if (this.name !== name) return;
       if (this.player) {
-        try { this.player.loadVideoById(t.yt); this.ready = true; this.sync(); } catch { this.fail(name); }
+        try { this.player.loadVideoById({ videoId: t.yt, startSeconds: this.startAt }); this.ready = true; this.sync(); } catch { this.fail(name); }
         return;
       }
       this.player = new window.YT.Player('yt-player', {
         width: 200, height: 200, videoId: t.yt,
-        playerVars: { autoplay: 1, controls: 1, loop: 1, playlist: t.yt, rel: 0, playsinline: 1, modestbranding: 1 },
+        playerVars: { autoplay: 1, controls: 1, start: this.startAt, rel: 0, playsinline: 1, modestbranding: 1 },
         events: {
+          // fin du morceau : on repart du point de départ choisi (et pas de 0:00)
+          onStateChange: (e) => {
+            if (e.data === 0 && this.name) {
+              try { this.player.seekTo(this.startAt || 0, true); this.player.playVideo(); } catch { /* ignore */ }
+            }
+          },
           onReady: () => { this.ready = true; clearTimeout(this.guard); this.player.setVolume(CUSTOM_VOLUME); this.setRate(this.rate, true); this.sync(); },
           onError: () => this.fail(this.name || name),
         },
@@ -261,6 +273,7 @@ function handle(msg) {
     case 'lobby':
       roomCode = msg.code;
       hostId = msg.hostId;
+      const prevRoles = new Map(players.map((q) => [q.id, q.role]));
       players = msg.players;
       levelList = msg.levels || [];
       chapterList = msg.chapters || [];
@@ -272,7 +285,12 @@ function handle(msg) {
         renderLobby();
       } else if (level) {
         updateHud();
+        rolesChanged(prevRoles);
+        updateTeamBar();
       }
+      break;
+    case 'emote':
+      onEmote(msg);
       break;
     case 'start':
       startLevel(msg);
@@ -651,6 +669,98 @@ function applyState(msg) {
   updateTimer();
 }
 
+/* ---------- Équipe : échange de rôles, emotes, messages ---------- */
+// Emotes : touches 4, 5, 6 (ou boutons sous le jeu). Pour en ajouter : une ligne ici (et un visage dans drawFace).
+const EMOTES = [
+  { key: 'Digit4', face: 'laugh', emoji: '😂', text: 'Mdr !' },
+  { key: 'Digit5', face: 'shock', emoji: '😱', text: 'Aïe aïe aïe !' },
+  { key: 'Digit6', face: 'cool', emoji: '😎', text: 'Trop facile.' },
+];
+const emotes = new Map(); // id du joueur -> { n, f0 }
+let lastEmoteAt = 0;
+
+function toast(text) {
+  const el = $('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function sendEmote(n) {
+  const now = performance.now();
+  if (!level || now - lastEmoteAt < 500) return;
+  lastEmoteAt = now;
+  send({ t: 'emote', e: n });
+}
+
+function onEmote(msg) {
+  const def = EMOTES[msg.e];
+  if (!def || !level) return;
+  emotes.set(msg.id, { n: msg.e, f0: frame });
+  const s = sprites.get(msg.id);
+  if (s) sparks(s.tx + PW / 2, s.ty - 8, '#ffd84a', 6, 2.4, 26);
+}
+
+function swapRoles() {
+  if (!level || players.length < 2) return;
+  send({ t: 'swaproles' });
+}
+
+// Appelé quand le serveur renvoie la liste des joueurs en pleine partie : un rôle a peut-être changé
+function rolesChanged(prev) {
+  let any = false;
+  players.forEach((p) => {
+    if (!prev.has(p.id) || prev.get(p.id) === p.role) return;
+    any = true;
+    const s = sprites.get(p.id);
+    if (!s) return;
+    const col = p.role === 'mage' ? '#b79cff' : '#9be564';
+    s.pop = 12;
+    s.castT = 0;
+    sparks(s.tx + PW / 2, s.ty + PH / 2, col, 12, 3.6, 40);
+    ring(s.tx + PW / 2, s.ty + PH / 2, col, 44);
+    flash(s.tx + PW / 2, s.ty + PH / 2, col, 64, 14);
+  });
+  if (!any) return;
+  armed = 1;
+  updateRoleHint();
+  window.Sfx.play('swap', 80);
+  const me = myPlayer();
+  if (me && level.cfg.abilities) toast(`Rôles échangés : tu es maintenant ${me.role === 'mage' ? 'le Mage' : 'l’Archer'} !`);
+}
+
+function updateTeamBar() {
+  const bar = $('teambar');
+  bar.innerHTML = '';
+  if (!level) return;
+  const add = (b) => {
+    b.type = 'button';
+    b.tabIndex = -1; // pas de focus : la barre d'espace doit rester le saut
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    bar.append(b);
+  };
+  if (level.cfg.abilities && players.length >= 2) {
+    const b = document.createElement('button');
+    b.className = 'team swap';
+    b.innerHTML = 'Échanger les rôles<small>T</small>';
+    b.title = 'Toi et ton coéquipier échangez vos rôles (Mage ↔ Archer), à tout moment';
+    b.onclick = swapRoles;
+    add(b);
+    const sep = document.createElement('span');
+    sep.className = 'sep';
+    bar.append(sep);
+  }
+  EMOTES.forEach((m, i) => {
+    const b = document.createElement('button');
+    b.className = 'team emo';
+    b.textContent = m.emoji;
+    b.title = `${m.text} (touche ${i + 4})`;
+    b.onclick = () => sendEmote(i);
+    add(b);
+  });
+}
+
 function startLevel(msg) {
   const T = msg.tile;
   const cfg = msg.cfg || {};
@@ -691,7 +801,9 @@ function startLevel(msg) {
   $('level-hint').textContent = level.hint + (level.timer ? `  ⏱ Niveau chronométré : ${spokenTime(level.timer)}.` : '');
   armed = 1;
   lastTl = -1;
+  emotes.clear();
   updateRoleHint();
+  updateTeamBar();
   updateBanner();
   updateHud();
   updateTimer();
@@ -861,6 +973,8 @@ function helpHtml() {
     + '<li>Bouger : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>)</li>'
     + '<li>Sauter : <kbd>Espace</kbd> (ou <kbd>↑</kbd>)</li>'
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
+    + '<li><kbd>T</kbd> échange ton rôle avec ton coéquipier (Mage ↔ Archer), à tout moment</li>'
+    + '<li><kbd>4</kbd> <kbd>5</kbd> <kbd>6</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
     + '<li><kbd>M</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
   if (kit === 'mage') {
     h += '<h4>Tu es le Mage</h4><ul>'
@@ -1153,6 +1267,9 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && $('help').classList.contains('show')) return hideHelp();
   if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : showHelp();
   if (/^(Digit|Numpad)[1-3]$/.test(e.code) && !e.repeat) return armSlot(Number(e.code.slice(-1)));
+  const emo = EMOTES.findIndex((m) => m.key === e.code.replace('Numpad', 'Digit'));
+  if (emo >= 0 && !e.repeat) return sendEmote(emo);
+  if (e.code === 'KeyT' && !e.repeat) return swapRoles();
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
   if (e.code === 'KeyJ' && !e.repeat) return cast(1);
@@ -1963,6 +2080,144 @@ function stepSprite(s, p) {
   s.ly += (ty - s.ly) * 0.15;
 }
 
+
+// Visages des emotes, dessinés à la main pour rester dans le style du jeu (pas de dépendance à la police d'emojis)
+function drawFace(kind, x, y, r, t) {
+  const u = r / 12;
+  ctx.save();
+  ctx.translate(x, y);
+  if (kind === 'laugh') ctx.rotate(Math.sin(t * 0.5) * 0.14);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, TAU);
+  fillOut(vGrad(-r, r, '#ffe566', '#ffb52e'), 1.6);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (kind === 'laugh') {
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 1.8 * u;
+    [-4.4, 4.4].forEach((ex) => {
+      ctx.beginPath();
+      ctx.arc(ex * u, -2.4 * u, 2.6 * u, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    });
+    ctx.beginPath();
+    ctx.moveTo(-6.4 * u, 1.4 * u);
+    ctx.quadraticCurveTo(0, 13 * u, 6.4 * u, 1.4 * u);
+    ctx.closePath();
+    fillOut('#6a1f33', 1.3);
+    ctx.fillStyle = '#ff7f95';
+    ctx.beginPath();
+    ctx.ellipse(0, 6.4 * u, 3.2 * u, 1.8 * u, 0, 0, TAU);
+    ctx.fill();
+    const k = (t * 0.06) % 1; // larmes de rire
+    ctx.fillStyle = 'rgba(120, 214, 255, .95)';
+    [-1, 1].forEach((sd) => {
+      ctx.beginPath();
+      ctx.ellipse(sd * (9.6 * u), (-0.5 + k * 5) * u, 1.5 * u, 2.2 * u, 0, 0, TAU);
+      ctx.fill();
+    });
+  } else if (kind === 'shock') {
+    const jit = Math.sin(t * 1.3) * 0.5 * u;
+    [-4.4, 4.4].forEach((ex) => {
+      ctx.beginPath();
+      ctx.arc(ex * u, -2.2 * u, 3.3 * u, 0, TAU);
+      fillOut('#ffffff', 1.1);
+      ctx.fillStyle = OUTLINE;
+      ctx.beginPath();
+      ctx.arc(ex * u + jit, -2.2 * u, 1.3 * u, 0, TAU);
+      ctx.fill();
+    });
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 1.5 * u;
+    ctx.beginPath();
+    ctx.moveTo(-7.6 * u, -7 * u);
+    ctx.lineTo(-2.2 * u, -8.8 * u);
+    ctx.moveTo(2.2 * u, -8.8 * u);
+    ctx.lineTo(7.6 * u, -7 * u);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 5.8 * u, 2.6 * u, 3.6 * u, 0, 0, TAU);
+    fillOut('#6a1f33', 1.2);
+    ctx.fillStyle = 'rgba(120, 214, 255, .95)'; // goutte de sueur
+    ctx.beginPath();
+    ctx.moveTo(9.4 * u, -9.6 * u);
+    ctx.quadraticCurveTo(12.2 * u, -5.6 * u, 9.4 * u, -4.4 * u);
+    ctx.quadraticCurveTo(6.6 * u, -5.6 * u, 9.4 * u, -9.6 * u);
+    ctx.fill();
+  } else {
+    rrPath(-10 * u, -5.4 * u, 8.6 * u, 6 * u, 2.2 * u);
+    fillOut('#1d1a3b', 1);
+    rrPath(1.4 * u, -5.4 * u, 8.6 * u, 6 * u, 2.2 * u);
+    fillOut('#1d1a3b', 1);
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 1.6 * u;
+    ctx.beginPath();
+    ctx.moveTo(-1.5 * u, -3.6 * u);
+    ctx.lineTo(1.5 * u, -3.6 * u);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.6)';
+    ctx.lineWidth = 1.2 * u;
+    ctx.beginPath();
+    ctx.moveTo(-8 * u, -4.4 * u);
+    ctx.lineTo(-5.6 * u, -1.6 * u);
+    ctx.moveTo(3.4 * u, -4.4 * u);
+    ctx.lineTo(5.8 * u, -1.6 * u);
+    ctx.stroke();
+    ctx.strokeStyle = OUTLINE;
+    ctx.lineWidth = 1.6 * u;
+    ctx.beginPath();
+    ctx.moveTo(-4.4 * u, 5 * u);
+    ctx.quadraticCurveTo(1.4 * u, 9 * u, 6.6 * u, 3.8 * u);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Bulle de dialogue au-dessus d'un joueur : apparaît en rebondissant, flotte, puis s'efface
+function drawEmote(p, cx, top, mine) {
+  const em = emotes.get(p.id);
+  if (!em) return;
+  const def = EMOTES[em.n];
+  const age = frame - em.f0;
+  const LIFE = 170;
+  if (!def || age > LIFE) { emotes.delete(p.id); return; }
+  const pop = Math.max(0.01, easeOutBack(Math.min(1, age / 14)));
+  ctx.save();
+  ctx.font = '700 12px Nunito, sans-serif';
+  const tw = ctx.measureText(def.text).width;
+  const w = 8 + 24 + 6 + tw + 10;
+  const h = 30;
+  const bx = Math.max(3, Math.min(LW - w - 3, cx - w / 2));
+  const by = top - (mine ? 32 : 22) - h + Math.sin(frame * 0.12) * 1.5;
+  const tipX = Math.max(bx + 10, Math.min(bx + w - 10, cx));
+  const tipY = by + h + 8;
+  ctx.globalAlpha = Math.min(1, (LIFE - age) / 18);
+  ctx.translate(tipX, tipY);
+  ctx.scale(pop, pop);
+  ctx.translate(-tipX, -tipY);
+  rrPath(bx, by, w, h, 14);
+  ctx.fillStyle = '#fffdf3';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = OUTLINE;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(tipX - 5, by + h - 1);
+  ctx.lineTo(tipX, tipY);
+  ctx.lineTo(tipX + 5, by + h - 1);
+  ctx.fillStyle = '#fffdf3';
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillRect(tipX - 4, by + h - 2.4, 8, 2.8); // cache le trait entre la bulle et la pointe
+  drawFace(def.face, bx + 8 + 12, by + h / 2, 11.5, frame);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#2a2147';
+  ctx.fillText(def.text, bx + 8 + 24 + 6, by + h / 2 + 1);
+  ctx.restore();
+}
+
 function drawPlayer(p, s, frame) {
   const kit = level.cfg.abilities ? p.role : 'plain';
   const skin = p.skin || 'classic';
@@ -2020,6 +2275,7 @@ function drawPlayer(p, s, frame) {
   rrPath(cx - 9, top + 3, 18, 3, 1.5);
   ctx.fillStyle = p.color;
   ctx.fill();
+  drawEmote(p, cx, top, mine);
   if (mine) { // petite flèche qui rebondit au-dessus de son propre personnage
     const b = Math.sin(frame * 0.12) * 1.8;
     ctx.beginPath();
