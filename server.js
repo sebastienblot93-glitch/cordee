@@ -325,6 +325,18 @@ function resetPlayers(room) {
   }
 }
 
+// Applique le rôle d'un joueur en cours de niveau : on garde sa position et sa vitesse, on remet ses capacités à neuf
+function applyRole(room, p) {
+  p.kit = room.level.cfg.abilities ? p.role : 'plain';
+  p.airJump = true;
+  p.dashAvail = true;
+  p.dashT = 0;
+  p.dashCd = 0;
+  p.cd = [0, 0, 0];
+  p.jumpPending = false;
+  p.dashPending = false;
+}
+
 function hasBothRoles(room) {
   const roles = new Set([...room.players.values()].map((p) => p.role));
   return roles.has('mage') && roles.has('archer');
@@ -624,6 +636,38 @@ wss.on('connection', (ws) => {
         if (!room || room.status !== 'lobby' || !ROLES.includes(msg.role)) return;
         room.players.get(ws.id).role = msg.role;
         broadcast(room, lobbyMsg(room));
+        break;
+      }
+      case 'swaproles': {
+        // En pleine partie, n'importe quel joueur peut échanger son rôle avec celui de l'autre rôle (Mage <-> Archer)
+        const me = room && room.players.get(ws.id);
+        if (!me || room.status !== 'playing') return;
+        const now = Date.now();
+        if (now < (me.roleLockUntil || 0)) return; // petite pause pour éviter les échanges en rafale
+        const other = [...room.players.values()].find((q) => q !== me && q.role !== me.role);
+        const mine = me.role;
+        if (other) {
+          me.role = other.role;
+          other.role = mine;
+          other.roleLockUntil = now + 1500;
+          applyRole(room, other);
+        } else {
+          me.role = mine === 'mage' ? 'archer' : 'mage';
+        }
+        me.roleLockUntil = now + 1500;
+        applyRole(room, me);
+        broadcast(room, lobbyMsg(room));
+        break;
+      }
+      case 'emote': {
+        // Bulle de dialogue : relayée à toute la room (au plus une toutes les 0,6 s par joueur)
+        const me = room && room.players.get(ws.id);
+        const n = parseInt(msg.e, 10);
+        if (!me || !(n >= 0 && n < 12)) return;
+        const now = Date.now();
+        if (now < (me.emoteUntil || 0)) return;
+        me.emoteUntil = now + 600;
+        broadcast(room, { t: 'emote', id: ws.id, e: n });
         break;
       }
       case 'start': {
