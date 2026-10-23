@@ -294,6 +294,11 @@ function handle(msg) {
         updateTeamBar();
       }
       break;
+    case 'nograb':
+      toast(msg.why === 'ceiling' ? 'Pas la place de porter ici : plafond trop bas.'
+        : msg.why === 'level' ? 'Porter (F) n’est possible que dans certains niveaux, par exemple « Courte-échelle ».'
+        : 'Collez-vous à votre coéquipier (même hauteur), puis appuyez sur F.');
+      break;
     case 'emote':
       onEmote(msg);
       break;
@@ -747,7 +752,8 @@ function onEmote(msg) {
 
 // Porter / lancer son coéquipier (niveaux avec cfg.carry) : 1er appui = porter, 2e appui = lancer
 function grabPartner() {
-  if (!level || !level.cfg.carry) return;
+  if (!level) return;
+  if (!level.cfg.carry) return toast('Porter (F) n’est possible que dans certains niveaux, par exemple « Courte-échelle ».');
   send({ t: 'grab' });
 }
 
@@ -2057,7 +2063,7 @@ function drawCoopOverlay(mine) {
         const dy = s.ty - mine.ty;
         if (dx <= Phys.COOP.grabReach && dy >= -PH - 8 && dy <= 10) {
           const b = Math.sin(frame * 0.2) * 2;
-          outlinedText('F : porter', s.x + PW / 2, s.y - 34 + b, '#ffffff');
+          outlinedText('F : porter', s.x + PW / 2, s.y - 50 + b, '#ffffff');
         }
       });
     }
