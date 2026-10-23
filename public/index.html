@@ -63,8 +63,8 @@
     .dot { width: 18px; height: 22px; border-radius: 3px; flex: none; }
     .tag { color: var(--muted); font-size: .85rem; }
 
-    #game-wrap { position: relative; width: min(960px, 96vw); border-radius: 8px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px -4px var(--accent); transition: box-shadow .8s; }
-    canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: pixelated; }
+    #game-wrap { position: relative; width: min(960px, 96vw); overflow: hidden; background: #0d0d26; border-radius: 10px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px -4px var(--accent); transition: box-shadow .8s; }
+    canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: auto; will-change: transform; }
     #banner {
       position: absolute; inset: 0; display: none; place-items: center; text-align: center;
       font-family: 'Silkscreen', monospace; font-size: clamp(1.4rem, 5vw, 3rem); color: var(--accent);
@@ -164,6 +164,33 @@
       100% { opacity: 0; transform: translate(-50%, -8px); }
     }
     @media (prefers-reduced-motion: reduce) { #chapter-card.show { animation: none; opacity: 1; } }
+
+    /* Finitions « cartoon lisse » : panneaux, boutons et titre */
+    h1 {
+      color: var(--sun); text-shadow: 0 3px 0 #b8741a, 0 6px 0 rgba(0, 0, 0, .35), 0 0 24px rgba(255, 210, 74, .45);
+      animation: titleBob 3.6s ease-in-out infinite;
+    }
+    @keyframes titleBob { 50% { transform: translateY(-3px); } }
+    .panel {
+      border-radius: 14px; border: 2px solid rgba(255, 255, 255, .07);
+      background: linear-gradient(180deg, #2b2b6c, #22225a); box-shadow: 0 6px 0 rgba(8, 8, 28, .45), 0 10px 24px rgba(0, 0, 0, .25);
+    }
+    button {
+      border-radius: 10px; box-shadow: 0 4px 0 rgba(0, 0, 0, .32); transition: transform .08s, box-shadow .08s, filter .15s;
+    }
+    button:not(:disabled):hover { transform: translateY(-1px); filter: brightness(1.08); }
+    button:not(:disabled):active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0, 0, 0, .32); }
+    button.ghost { box-shadow: none; }
+    input, select { border-radius: 10px; }
+    #look-preview { background: radial-gradient(ellipse at 50% 85%, #3a3a8c 0%, var(--night) 70%); border-radius: 12px; border: 2px solid rgba(255, 255, 255, .06); }
+    button.skin-btn { border-radius: 10px; background: radial-gradient(ellipse at 50% 90%, #30307a, var(--night) 75%); box-shadow: none; }
+    button.skin-btn:not(:disabled):hover { transform: translateY(-2px) scale(1.04); }
+    button.skin-btn.on { box-shadow: 0 0 14px -2px var(--sun); }
+    button.swatch { box-shadow: 0 2px 0 rgba(0, 0, 0, .3); }
+    button.swatch:not(:disabled):hover { transform: scale(1.15); }
+    button.act { border-radius: 12px; box-shadow: 0 4px 0 rgba(0, 0, 0, .3); }
+    #chapter-card, #help .card { border-radius: 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); }
+    @media (prefers-reduced-motion: reduce) { h1 { animation: none; } }
   </style>
 </head>
 <body>
