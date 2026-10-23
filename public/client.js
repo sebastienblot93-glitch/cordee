@@ -210,6 +210,7 @@ function freshWorld(lv) {
   return {
     status: 'playing', keys: [], open: [], pressed: [], door: lv.keys.length === 0,
     cr: [], tg: [], tc: [], bn: [], bt: [], seq: { p: 0, done: false, flash: false }, sh: [], ice: [], proj: [], cps: [], cd: [],
+    lk: 1, ld: 0, sy: 0, jw: new Map(), cy: [],
     deaths: 0, tl: lv.timer || 0, recvAt: performance.now(),
   };
 }
@@ -541,6 +542,25 @@ function reactToState(prev, msg) {
       flash(e[1] + 12, e[2] + 14, '#4dd8e8', 66, 14);
       flash(e[3] + 12, e[4] + 14, '#ff6b9d', 66, 14);
       sfx('swap');
+    } else if (e[0] === 'sync') {
+      sfx('crystal', 100);
+      sfx('door', 100);
+      players.forEach((q) => {
+        const s = sprites.get(q.id);
+        if (!s) return;
+        ring(s.tx + 12, s.ty + 14, '#ffd24a', 60);
+        sparks(s.tx + 12, s.ty + 6, '#fff3a0', 10, 3.6, 36);
+      });
+      shake(2);
+      toast('Synchro ! Les ponts dorés sont là, courez !');
+    } else if (e[0] === 'grab') {
+      sfx('click', 60);
+      ring(e[1] + 12, e[2] + 14, '#ffffff', 36);
+      sparks(e[1] + 12, e[2], '#ffffff', 6, 2.4, 24);
+    } else if (e[0] === 'throw') {
+      sfx('spring', 100);
+      burst(e[1] + 12, e[2] + 20, '#ffffff', 8, 2.4, 0.05, 24);
+      ring(e[1] + 12, e[2] + 14, '#ffd24a', 40);
     } else if (e[0] === 'fire') {
       burst(e[1], e[2], '#ffb040', 10, 2.6, -0.02, 26, 4, { add: true });
       flash(e[1], e[2], '#ff8a2a', 50, 12);
@@ -637,7 +657,9 @@ function applyState(msg) {
   world = {
     status: msg.status, keys: msg.keys, open: msg.open, pressed: msg.pressed, door: msg.door,
     cr: msg.cr, tg: msg.tg, tc: msg.tc || [], bn: msg.bn || [], bt: msg.bt || [], seq: msg.seq, sh: msg.sh, ice: msg.ice,
-    proj: msg.proj, cps: msg.cps, cd: msg.cd, deaths: msg.deaths, tl: msg.tl || 0, recvAt: performance.now(),
+    proj: msg.proj, cps: msg.cps, cd: msg.cd, deaths: msg.deaths,
+    lk: msg.lk === undefined ? 1 : msg.lk, ld: msg.ld || 0, sy: msg.sy || 0, cy: msg.cy || [],
+    jw: new Map(msg.p.map((q, i) => [q[0], (msg.jw || [])[i] || 0])), tl: msg.tl || 0, recvAt: performance.now(),
   };
   for (const [id, x, y, face] of msg.p) {
     let s = sprites.get(id);
@@ -723,6 +745,12 @@ function onEmote(msg) {
   if (s) sparks(s.tx + PW / 2, s.ty - 8, '#ffd84a', 6, 2.4, 26);
 }
 
+// Porter / lancer son coéquipier (niveaux avec cfg.carry) : 1er appui = porter, 2e appui = lancer
+function grabPartner() {
+  if (!level || !level.cfg.carry) return;
+  send({ t: 'grab' });
+}
+
 function swapRoles() {
   if (!level || players.length < 2) return;
   send({ t: 'swaproles' });
@@ -772,6 +800,17 @@ function updateTeamBar() {
     sep.className = 'sep';
     bar.append(sep);
   }
+  if (level.cfg.carry && players.length >= 2) {
+    const b = document.createElement('button');
+    b.className = 'team swap';
+    b.innerHTML = 'Porter / lancer<small>F</small>';
+    b.title = 'Près de ton coéquipier : porte-le. Appuie encore pour le lancer devant toi !';
+    b.onclick = grabPartner;
+    add(b);
+    const sep = document.createElement('span');
+    sep.className = 'sep';
+    bar.append(sep);
+  }
   EMOTES.forEach((m, i) => {
     const b = document.createElement('button');
     b.className = 'team emo';
@@ -802,6 +841,7 @@ function startLevel(msg) {
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
       seqGroup: cfg.seqGroup || 0, labels: cfg.labels || [],
+      link: !!cfg.link, sync: !!cfg.sync, carry: !!cfg.carry, heavy: cfg.heavy || [],
     },
     L,
   };
@@ -994,6 +1034,10 @@ function helpHtml() {
     + '<li>Bouger : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>)</li>'
     + '<li>Sauter : <kbd>Espace</kbd> (ou <kbd>↑</kbd>)</li>'
     + '<li><kbd>Maj</kbd> : dash, une course éclair (pour les deux joueurs)</li>'
+    + (level && level.cfg.carry ? '<li><kbd>F</kbd> : porter ton coéquipier (il doit être tout près), puis <kbd>F</kbd> encore pour le lancer devant toi. Le porté peut sauter pour descendre.</li>' : '')
+    + (level && level.cfg.link ? '<li><b>Blocs verts liés</b> : ils disparaissent si vous vous éloignez de plus de 7 cases. Le fil entre vous vire au rouge avant la rupture.</li>' : '')
+    + (level && level.cfg.sync ? '<li><b>Ponts dorés</b> : sautez <b>tous les deux en même temps</b> (moins d’une seconde d’écart) pour les faire apparaître 6 secondes.</li>' : '')
+    + (level && level.cfg.heavy && level.cfg.heavy.length ? '<li><b>Plaque lourde</b> : il faut être <b>deux</b> dessus pour l’enfoncer.</li>' : '')
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
     + '<li><kbd>T</kbd> échange ton rôle avec ton coéquipier (Mage ↔ Archer), à tout moment</li>'
     + '<li><kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
@@ -1292,6 +1336,7 @@ window.addEventListener('keydown', (e) => {
   const emo = e.ctrlKey || e.metaKey || e.altKey ? -1 : EMOTES.findIndex((m) => m.key === String(e.key).toLowerCase());
   if (emo >= 0) { if (!e.repeat) sendEmote(emo); return; }
   if (e.code === 'KeyT' && !e.repeat) return swapRoles();
+  if (e.code === 'KeyF' && !e.repeat) return grabPartner();
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
   if (e.code === 'KeyK' && !e.repeat) return cast(2);
@@ -1802,6 +1847,221 @@ function drawRune(x, y, T, hover, ok) {
   ctx.moveTo(x + 9, y + 16);
   ctx.lineTo(x + 23, y + 16);
   ctx.stroke();
+  ctx.restore();
+}
+
+/* ---------- Coopération : blocs liés, ponts synchro, fil, porter ---------- */
+function chainIcon(cx, cy, col) {
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = 'round';
+  rrPath(cx - 8, cy - 4.5, 10, 9, 4.5);
+  ctx.stroke();
+  rrPath(cx - 2, cy - 4.5, 10, 9, 4.5);
+  ctx.stroke();
+}
+
+function drawLinkBlock(x, y, T, on, ratio, frame) {
+  const warn = on && ratio > 0.82;
+  if (warn && Math.floor(frame / 5) % 2 === 0 && ratio > 0.93) return; // clignote : rupture imminente
+  const state = !on ? 'off' : warn ? 'warn' : 'on';
+  const spr = cachedSprite(`link|${state}`, T + 4, T + 4, 2, 2, () => {
+    if (state === 'off') { // fantôme : le bloc reviendra si vous vous rapprochez
+      ctx.globalAlpha = 0.55;
+      rrPath(2.5, 2.5, T - 5, T - 5, 5);
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#7be0b0';
+      ctx.stroke();
+      ctx.setLineDash([]);
+      chainIcon(T / 2, T / 2, 'rgba(123,224,176,.6)');
+      return;
+    }
+    const hi = state === 'warn' ? '#ffc27a' : '#9bf5cc';
+    const lo = state === 'warn' ? '#e0663a' : '#2f9e7a';
+    rrPath(0.5, 0.5, T - 1, T - 1, 5);
+    fillOut(vGrad(0, T, hi, lo), 1.8, state === 'warn' ? '#7a2e14' : '#17594a');
+    ctx.fillStyle = 'rgba(255,255,255,.4)';
+    ctx.fillRect(4, 3, T - 8, 3);
+    chainIcon(T / 2, T / 2 + 1, 'rgba(255,255,255,.9)');
+  });
+  blitSprite(spr, x, y);
+}
+
+function drawSyncBlock(x, y, T, ticks, frame) {
+  const on = ticks > 0;
+  if (on && ticks < 50 && Math.floor(frame / 4) % 2 === 0) return; // bientôt fini : clignote
+  const spr = cachedSprite(`sync|${on}`, T + 4, T + 4, 2, 2, () => {
+    if (!on) {
+      ctx.globalAlpha = 0.6;
+      rrPath(2.5, 2.5, T - 5, T - 5, 5);
+      ctx.setLineDash([3, 5]);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffd24a';
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255,210,74,.55)';
+      ctx.beginPath();
+      ctx.moveTo(T / 2, T / 2 - 9);
+      ctx.lineTo(T / 2 + 6, T / 2 + 2);
+      ctx.lineTo(T / 2 - 6, T / 2 + 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(T / 2, T / 2 - 1);
+      ctx.lineTo(T / 2 + 6, T / 2 + 10);
+      ctx.lineTo(T / 2 - 6, T / 2 + 10);
+      ctx.closePath();
+      ctx.fill();
+      return;
+    }
+    rrPath(0.5, 0.5, T - 1, T - 1, 5);
+    fillOut(vGrad(0, T, '#fff3b0', '#e8a523'), 1.8, '#7a4a10');
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.fillRect(4, 3, T - 8, 3);
+    sparkle4(T / 2, T / 2 + 1, 7, 'rgba(255,255,255,.95)');
+  });
+  blitSprite(spr, x, y);
+  if (on) glowAt(x + T / 2, y + T / 2, 26, '#ffd24a', 0.35);
+}
+
+// Le fil qui relie les joueurs (niveaux avec blocs liés) : vert, jaune puis rouge à l'approche de la rupture
+function drawTether() {
+  const ids = players.map((p) => p.id).filter((id) => sprites.has(id)).sort();
+  if (ids.length < 2) return;
+  const r = world.ld;
+  const broken = !world.lk;
+  const col = broken ? '#ff5a5a' : r > 0.82 ? '#ff7a4a' : r > 0.62 ? '#ffd24a' : '#7bf0b0';
+  for (let i = 0; i < ids.length - 1; i++) {
+    const a = sprites.get(ids[i]);
+    const b = sprites.get(ids[i + 1]);
+    const ax = a.x + PW / 2;
+    const ay = a.y + PH * 0.55;
+    const bx = b.x + PW / 2;
+    const by = b.y + PH * 0.55;
+    const d = Math.hypot(bx - ax, by - ay);
+    const sag = Math.max(0, 1 - d / 224) * 26; // le fil pend quand il est lâche, se tend en s'éloignant
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(14,10,40,.7)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + sag, bx, by);
+    ctx.stroke();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = broken ? 2 : 3;
+    if (broken || r > 0.82) ctx.setLineDash([6, 5]);
+    ctx.lineDashOffset = -frame * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.quadraticCurveTo((ax + bx) / 2, (ay + by) / 2 + sag, bx, by);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// Jauge du lien, indications de saut synchro, "F" pour porter, trajectoire du lancer
+function drawCoopOverlay(mine) {
+  const cfg = level.cfg;
+  const W = LW;
+  ctx.save();
+  ctx.textAlign = 'center';
+  if (cfg.link && players.length >= 2) {
+    const r = Math.min(1.2, world.ld);
+    const broken = !world.lk;
+    const col = broken ? '#ff5a5a' : r > 0.82 ? '#ff7a4a' : r > 0.62 ? '#ffd24a' : '#7bf0b0';
+    const bw = 150;
+    const bx = W / 2 - bw / 2;
+    const by = 40;
+    rrPath(bx - 3, by - 3, bw + 6, 12, 6);
+    ctx.fillStyle = 'rgba(14,10,40,.7)';
+    ctx.fill();
+    rrPath(bx, by, Math.max(6, bw * Math.min(1, r)), 6, 3);
+    ctx.fillStyle = col;
+    ctx.fill();
+    ctx.font = '700 11px Nunito, sans-serif';
+    const msg = broken ? 'LIEN ROMPU : rapprochez-vous !' : r > 0.82 ? 'Attention : trop loin !' : 'Lien entre vous';
+    if (!broken || Math.floor(frame / 12) % 2 === 0) outlinedText(msg, W / 2, by - 7, col);
+  }
+  if (cfg.sync && players.length >= 2) {
+    if (world.sy > 0) {
+      const bw = 150;
+      const bx = W / 2 - bw / 2;
+      rrPath(bx - 3, 37, bw + 6, 12, 6);
+      ctx.fillStyle = 'rgba(14,10,40,.7)';
+      ctx.fill();
+      rrPath(bx, 40, Math.max(4, bw * Math.min(1, world.sy / Phys.COOP.syncHold)), 6, 3);
+      ctx.fillStyle = '#ffd24a';
+      ctx.fill();
+      ctx.font = '700 11px Nunito, sans-serif';
+      outlinedText('PONT ACTIF : courez !', W / 2, 33, '#ffe08a');
+    } else {
+      ctx.font = '700 11px Nunito, sans-serif';
+      outlinedText('Sautez ENSEMBLE pour faire apparaître le pont', W / 2, 36, '#ffe08a');
+    }
+    // un joueur a sauté : on l'indique, et on invite l'autre à sauter vite
+    const waiting = players.filter((p) => (world.jw.get(p.id) || 0) > 0);
+    if (world.sy <= 0 && waiting.length > 0 && waiting.length < players.length) {
+      players.forEach((p) => {
+        const s = sprites.get(p.id);
+        if (!s) return;
+        const left = world.jw.get(p.id) || 0;
+        const cx = s.x + PW / 2;
+        if (left > 0) { // a déjà sauté : anneau qui se vide
+          ctx.beginPath();
+          ctx.arc(cx, s.y + PH / 2, 22, -Math.PI / 2, -Math.PI / 2 + (left / 20) * TAU);
+          ctx.strokeStyle = '#ffd24a';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        } else { // doit sauter maintenant !
+          ctx.font = '800 14px Nunito, sans-serif';
+          outlinedText('SAUTE !', cx, s.y - 30 - Math.abs(Math.sin(frame * 0.3)) * 4, '#ffd24a');
+        }
+      });
+    }
+  }
+  if (cfg.carry && players.length >= 2 && world.status === 'playing' && mine) {
+    const iCarry = world.cy.find((c) => c[0] === myId);
+    const iAmCarried = world.cy.find((c) => c[1] === myId);
+    ctx.font = '800 13px Nunito, sans-serif';
+    if (iAmCarried) {
+      outlinedText('Espace : descendre', mine.x + PW / 2, mine.y - 26, '#ffffff');
+    } else if (iCarry) {
+      outlinedText('F : lancer !', mine.x + PW / 2, mine.y - PH - 34, '#ffd24a');
+      // trajectoire du lancer
+      const st = Phys.newPlayerState('plain');
+      st.x = mine.tx;
+      st.y = mine.ty - PH;
+      st.vy = Phys.COOP.throwVy;
+      st.vx = (mine.face || 1) * Phys.COOP.throwVx;
+      ctx.fillStyle = '#ffd24a';
+      for (let i = 0; i < 90; i++) {
+        Phys.stepPlayer(level.L, st);
+        if (i % 3 === 0) {
+          ctx.globalAlpha = 0.8 * (1 - i / 110);
+          ctx.beginPath();
+          ctx.arc(st.x + PW / 2, st.y + PH / 2, 2.6, 0, TAU);
+          ctx.fill();
+        }
+        if (st.onGround && i > 4) break;
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // "F" au-dessus du coéquipier s'il est assez près pour être porté
+      players.forEach((p) => {
+        if (p.id === myId) return;
+        const s = sprites.get(p.id);
+        if (!s || world.cy.some((c) => c[1] === p.id || c[0] === p.id)) return;
+        const dx = Math.abs(s.tx - mine.tx);
+        const dy = s.ty - mine.ty;
+        if (dx <= Phys.COOP.grabReach && dy >= -PH - 8 && dy <= 10) {
+          const b = Math.sin(frame * 0.2) * 2;
+          outlinedText('F : porter', s.x + PW / 2, s.y - 34 + b, '#ffffff');
+        }
+      });
+    }
+  }
   ctx.restore();
 }
 
@@ -2484,6 +2744,8 @@ function draw() {
     open: new Set(world.open), shut: new Set(world.sh), pressed: new Set(world.pressed), burnt: new Set(world.bt),
     burning: new Set(world.bn), ice: new Set(world.ice.map((b) => b[1] * L.w + b[0])),
   });
+  L.linkOn = !!world.lk;
+  L.syncOn = world.sy > 0;
   L.open = S.open;
   L.shutOpen = S.shut;
   L.ice = S.ice;
@@ -2542,6 +2804,10 @@ function draw() {
       } else if (ch === 'w' || ch === 'v' || ch === 'u') {
         const g = ch === 'w' ? 1 : ch === 'v' ? 2 : 3;
         drawShutter(x, y, T, g, shutSet.has(g));
+      } else if (ch === 'l') {
+        drawLinkBlock(x, y, T, !!world.lk, world.ld, frame);
+      } else if (ch === 's') {
+        drawSyncBlock(x, y, T, world.sy, frame);
       } else if (ch === 'j') {
         const idx = ty * L.w + tx;
         const a = springAnim.get(idx) || 0;
@@ -2631,6 +2897,8 @@ function draw() {
     ctx.restore();
   }
 
+  if (level.cfg.link) drawTether();
+
   // ombres puis joueurs (le tien passe devant)
   const order = players.slice().sort((a, b) => (a.id === myId) - (b.id === myId));
   for (const p of order) {
@@ -2649,6 +2917,7 @@ function draw() {
 
   const mine = sprites.get(myId);
   if (mine && world.status === 'playing') drawAim(mine);
+  drawCoopOverlay(mine);
 
   ctx.globalAlpha = 1;
   ctx.drawImage(level.vig, 0, 0, W, H);
