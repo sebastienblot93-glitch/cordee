@@ -384,18 +384,19 @@ CHAPTERS.forEach((ch, i) => {
   for (let k = 0; k < ch.count; k++) LEVELS[_c++].chapter = i;
 });
 
-// Minuteur (en secondes) : seulement sur le dernier niveau de chaque chapitre.
-// Si le temps est écoulé, le niveau redémarre. Pour changer une durée ou en ajouter une,
-// modifiez simplement ce tableau (nom du niveau : secondes). 0 ou absent = pas de minuteur.
+// Minuteur (en secondes) : chaque niveau en a un. Si le temps est écoulé, le niveau redémarre.
+// Pour changer une durée, modifiez simplement ce tableau (nom du niveau : secondes).
+// Un niveau absent du tableau reçoit DEFAULT_TIMER ; mettre 0 désactive le minuteur de ce niveau.
+const DEFAULT_TIMER = 120;
 const TIMERS = {
-  'Le mur': 50, // chapitre 1
-  'L’escalier de glace': 60, // chapitre 2
-  'Le va-et-vient': 60, // chapitre 3
-  'Synchro': 80, // chapitre 4
-  'Jardin secret': 80, // chapitre 5
-  'Brasier': 90, // chapitre 6
-  'Cordée': 120, // chapitre 7
+  'Échauffement': 90, 'Le mur': 60, // chapitre 1 : la prairie
+  'L’étincelle': 90, 'Le tireur': 90, 'Le gouffre': 90, 'L’escalier de glace': 90, // chapitre 2 : les Arcanes
+  'Dans le noir': 120, 'Le va-et-vient': 90, // chapitre 3 : les Ténèbres
+  'Le judas': 90, 'Tir d’adresse': 90, 'Le sceau': 90, 'Synchro': 100, // chapitre 4 : le Sanctuaire
+  'Tremplin': 90, 'Haute voltige': 100, 'Nénuphars': 100, 'Jardin secret': 100, // chapitre 5 : les Jardins
+  'Premier feu': 100, 'Les quatre feux': 110, 'La fournaise': 120, 'Brasier': 120, // chapitre 6 : la Forge
+  'Échange': 100, 'Le pilier': 100, 'Brouillard': 130, 'Cordée': 150, // chapitre 7 : les Brumes
 };
-LEVELS.forEach((l) => { l.timer = TIMERS[l.name] || 0; });
+LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 
 module.exports = { LEVELS, CHAPTERS };
