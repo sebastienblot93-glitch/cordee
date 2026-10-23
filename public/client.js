@@ -21,6 +21,10 @@ const SPELLS = {
     { slot: 1, name: 'Orbe', key: 'clic gauche', color: '#b79cff', tip: 'Active les cristaux' },
     { slot: 2, name: 'Glace', key: 'clic droit', color: '#a0e1ff', tip: 'Crée des plateformes sur les runes' },
     { slot: 3, name: 'Échange', key: 'bouton, puis clic gauche', color: '#ff9ad0', tip: 'Échange ta place avec l’autre joueur', need: 'swap' },
+    { slot: 0, name: 'Dash', key: 'touche Maj', color: '#9be564', tip: 'Course éclair', dash: true },
+  ],
+  plain: [
+    { slot: 0, name: 'Dash', key: 'touche Maj', color: '#9be564', tip: 'Course éclair', dash: true },
   ],
   archer: [
     { slot: 1, name: 'Flèche', key: 'clic gauche', color: '#e6c58a', tip: 'Active les cibles' },
@@ -670,11 +674,11 @@ function applyState(msg) {
 }
 
 /* ---------- Équipe : échange de rôles, emotes, messages ---------- */
-// Emotes : touches 4, 5, 6 (ou boutons sous le jeu). Pour en ajouter : une ligne ici (et un visage dans drawFace).
+// Emotes : touches G, M, J (la lettre écrite sur la touche, donc aussi en AZERTY) (ou boutons sous le jeu). Pour en ajouter : une ligne ici (et un visage dans drawFace).
 const EMOTES = [
-  { key: 'Digit4', face: 'laugh', emoji: '😂', text: 'Mdr !' },
-  { key: 'Digit5', face: 'shock', emoji: '😱', text: 'Aïe aïe aïe !' },
-  { key: 'Digit6', face: 'cool', emoji: '😎', text: 'Trop facile.' },
+  { key: 'g', face: 'laugh', emoji: '😂', text: 'Mdr !' },
+  { key: 'm', face: 'shock', emoji: '😱', text: 'Aïe aïe aïe !' },
+  { key: 'j', face: 'cool', emoji: '😎', text: 'Trop facile.' },
 ];
 const emotes = new Map(); // id du joueur -> { n, f0 }
 let lastEmoteAt = 0;
@@ -755,7 +759,7 @@ function updateTeamBar() {
     const b = document.createElement('button');
     b.className = 'team emo';
     b.textContent = m.emoji;
-    b.title = `${m.text} (touche ${i + 4})`;
+    b.title = `${m.text} (touche ${m.key.toUpperCase()})`;
     b.onclick = () => sendEmote(i);
     add(b);
   });
@@ -972,10 +976,11 @@ function helpHtml() {
   let h = '<h4>Pour tout le monde</h4><ul>'
     + '<li>Bouger : <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>)</li>'
     + '<li>Sauter : <kbd>Espace</kbd> (ou <kbd>↑</kbd>)</li>'
+    + '<li><kbd>Maj</kbd> : dash, une course éclair (pour les deux joueurs)</li>'
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
     + '<li><kbd>T</kbd> échange ton rôle avec ton coéquipier (Mage ↔ Archer), à tout moment</li>'
-    + '<li><kbd>4</kbd> <kbd>5</kbd> <kbd>6</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
-    + '<li><kbd>M</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
+    + '<li><kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
+    + '<li><kbd>P</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
   if (kit === 'mage') {
     h += '<h4>Tu es le Mage</h4><ul>'
       + '<li>Sous le jeu, <b>clique sur un sort</b> pour le choisir, puis <b>clique dans le jeu</b> à l’endroit à viser.</li>'
@@ -1197,7 +1202,7 @@ $('btn-copy').onclick = async () => {
 };
 
 function updateMuteButton() {
-  $('btn-mute').textContent = window.Sfx.isMuted() ? 'Son : coupé (M)' : 'Son : activé (M)';
+  $('btn-mute').textContent = window.Sfx.isMuted() ? 'Son : coupé (P)' : 'Son : activé (P)';
   $('btn-music').textContent = window.Sfx.musicEnabled() ? 'Musique : oui' : 'Musique : non';
   Custom.sync();
 }
@@ -1258,7 +1263,7 @@ function cast(slot) {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.key && e.key.toLowerCase() === 'm' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) {
+  if (e.code === 'KeyP' && !e.repeat && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) {
     window.Sfx.toggle();
     updateMuteButton();
     return;
@@ -1267,12 +1272,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Escape' && $('help').classList.contains('show')) return hideHelp();
   if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : showHelp();
   if (/^(Digit|Numpad)[1-3]$/.test(e.code) && !e.repeat) return armSlot(Number(e.code.slice(-1)));
-  const emo = EMOTES.findIndex((m) => m.key === e.code.replace('Numpad', 'Digit'));
-  if (emo >= 0 && !e.repeat) return sendEmote(emo);
+  const emo = e.ctrlKey || e.metaKey || e.altKey ? -1 : EMOTES.findIndex((m) => m.key === String(e.key).toLowerCase());
+  if (emo >= 0) { if (!e.repeat) sendEmote(emo); return; }
   if (e.code === 'KeyT' && !e.repeat) return swapRoles();
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
-  if (e.code === 'KeyJ' && !e.repeat) return cast(1);
   if (e.code === 'KeyK' && !e.repeat) return cast(2);
   if (e.code === 'KeyE' && !e.repeat) return cast(3);
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyL') && !e.repeat) {
