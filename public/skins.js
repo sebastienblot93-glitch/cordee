@@ -1383,24 +1383,21 @@
     },
   };
 
-  /* 14. Ogre (personnage original : peau bleu-gris, petites cornes, défenses) */
+  /* 14. Ogre (personnage original : peau verte, petites cornes, défenses, habits blancs et gris) */
   STYLES.ogre = {
-    tone: '#8fa9c4', pants: '#6b4f35', shoe: '#3b2b20', armW: 5, legW: 5.4,
-    body: () => '#8fa9c4', arm: () => '#8fa9c4',
+    tone: '#7cc05a', pants: '#80858f', shoe: '#4b4e57', armW: 5, legW: 5.4,
+    body: () => '#f2f2ee', arm: () => '#7cc05a',
     torso(g, P, o, C) {
       // ventre rond et clair, harnais de cuir de la couleur du joueur, collier de fourrure
-      ell(g, 0.4, -14.4, 4.6, 4.6, '#a9c0d8', 0);
       g.beginPath();
       g.moveTo(-6.6, -20.8);
       g.lineTo(-2.4, -21);
       g.lineTo(7, -10.6);
       g.lineTo(3.4, -9.8);
       g.closePath();
-      paint(g, C.col, 1.2);
-      g.fillStyle = '#d9c36a';
-      g.fillRect(1.6, -14.2, 2, 2);
-      box(g, -6.8, -11.2, 13.8, 2.4, 1, '#4a3320', 1.1);
-      g.fillStyle = '#d9c36a';
+      paint(g, '#9aa0ab', 1.2);
+      box(g, -6.8, -11.2, 13.8, 2.4, 1, '#6d727c', 1.1);
+      g.fillStyle = C.col;
       g.fillRect(-0.6, -11, 2.8, 2);
       // fourrure sur les épaules
       g.beginPath();
@@ -1409,7 +1406,7 @@
       g.lineTo(8.2, -20);
       g.quadraticCurveTo(0, -23.8, -8, -20);
       g.closePath();
-      paint(g, '#6b5a48', 1.2);
+      paint(g, '#c9ccd2', 1.2);
     },
     head(g, P, o, C) {
       // petites cornes
@@ -1426,7 +1423,7 @@
       ell(g, HX + 0.8, HY + 4.4, 9.6, 5.8, this.tone, 1.4);
       shine(g, HX - 3.2, HY - 4.8, 3.6, 2, -0.5, 0.22);
       // taches de peau
-      g.fillStyle = 'rgba(60,90,130,.22)';
+      g.fillStyle = 'rgba(30,90,30,.22)';
       g.beginPath();
       g.ellipse(HX - 5.6, HY + 1.2, 1.8, 1.2, 0, 0, TAU);
       g.ellipse(HX + 8.6, HY - 4.2, 1.3, 0.9, 0, 0, TAU);
@@ -1443,7 +1440,7 @@
           g.fill();
         }
       });
-      g.strokeStyle = '#2b3a55';
+      g.strokeStyle = '#24401a';
       g.lineWidth = 2;
       g.lineCap = 'round';
       g.beginPath();
@@ -1451,7 +1448,7 @@
       g.moveTo(HX + 4.6, HY - 2); g.lineTo(HX + 9, HY - 3.6);
       g.stroke();
       // nez large
-      ell(g, HX + 9, HY + 3.2, 2.2, 1.9, '#7a94b0', 1.1);
+      ell(g, HX + 9, HY + 3.2, 2.2, 1.9, '#62a345', 1.1);
       // bouche et défenses
       const open = P.air || P.castAng !== null || P.dash;
       g.strokeStyle = OUT;
@@ -1474,7 +1471,7 @@
       g.quadraticCurveTo(HX + 0.4, HY - 12.6 + Math.sin(P.t * 0.1) * 0.5, HX + 2.2, HY - 8.8);
       g.quadraticCurveTo(HX + 3.6, HY - 12, HX + 5.2, HY - 8.2);
       g.closePath();
-      paint(g, '#c4552a', 1.1);
+      paint(g, '#e0e0e0', 1.1);
     },
   };
 
