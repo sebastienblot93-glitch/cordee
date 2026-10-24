@@ -14,7 +14,7 @@ const LIGHT_MAGE = 100; // rayon de la lumière du Mage dans les niveaux sombres
 const LIGHT_SELF = 44; // rayon de la lueur de chaque joueur
 const LIGHT_TORCH = 92; // rayon d'une torche allumée
 // Couleur d'ambiance de chaque chapitre (cadre, titres, boutons)
-const ACCENT = { prairie: '#9be564', arcane: '#b79cff', dark: '#8aa0ff', sanctuary: '#ffd24a', garden: '#ff9ad0', forge: '#ff8a2a', mist: '#9fe0ee' };
+const ACCENT = { prairie: '#9be564', arcane: '#b79cff', dark: '#8aa0ff', sanctuary: '#ffd24a', garden: '#ff9ad0', forge: '#ff8a2a', mist: '#9fe0ee', summit: '#ff9fb8' };
 // Sorts affichés dans la barre sous le jeu (slot 0 = dash)
 const SPELLS = {
   mage: [
@@ -76,7 +76,7 @@ function saveLook() {
 //   { yt: 'IDENTIFIANT_DE_LA_VIDEO', title: 'Titre affiché', start: 15 }   (lecteur officiel YouTube, visible sous le jeu ;
 //        start = seconde de départ, facultatif : la musique y revient à chaque démarrage et à chaque boucle)
 //   { src: 'music/mon-fichier.mp3', title: 'Titre affiché' }    (fichier à déposer dans public/music/)
-// Thèmes : prairie, arcane, dark, sanctuary, garden, forge, mist. Sans ligne, le chapitre garde sa musique intégrée.
+// Thèmes : prairie, arcane, dark, sanctuary, garden, forge, mist, summit. Sans ligne, le chapitre garde sa musique intégrée.
 const CUSTOM_TRACKS = {
   prairie: { yt: 'oIUveqb6kSA', title: 'Indila x BENNETT · Dernière Danse (Techno Mix)' },
   arcane: { yt: '2zdqymnZoHc', start: 15, title: 'Shy’m · Et Alors !' },

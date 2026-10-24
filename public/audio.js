@@ -87,7 +87,7 @@
   }
 
   // Chaque chapitre a sa « voix » de saut
-  const JUMP_WAVE = { prairie: 'square', arcane: 'triangle', dark: 'sine', sanctuary: 'triangle', garden: 'sine', forge: 'sawtooth', mist: 'sine' };
+  const JUMP_WAVE = { prairie: 'square', arcane: 'triangle', dark: 'sine', sanctuary: 'triangle', garden: 'sine', forge: 'sawtooth', mist: 'sine', summit: 'sawtooth' };
   let jumpWave = 'square';
 
   const SOUNDS = {
@@ -196,6 +196,15 @@
       lead: '4 - - - - - 2 - - - 6 - - - 4 - 7 - - - 9 - - - - - 7 - - - 5 - 5 - - - 7 - - - - - 9 - - - 7 - 8 - - - 6 - - - 4 - - - 6 - 8 -',
       kick: 'x.......x.......', snare: '', hat: '..x...x...x...x.',
       w: { lead: 'sine', arp: 'triangle', bass: 'sine' }, v: { lead: 0.8, arp: 0.16, bass: 0.75 }, echo: true,
+    },
+    // 8. Le Sommet : tendu et héroïque (la mineur), tempo soutenu
+    summit: {
+      bpm: 138, tonic: 57, scale: MINOR, bo: -12,
+      prog: [[0, MIN], [3, MAJ], [8, MAJ], [10, MAJ]],
+      bass: '0.0.0.2.0.0.0.2.', arp: '0.2.1.2.0.2.3.2.',
+      lead: '7 - 9 - 11 - 9 - 7 - 4 - 7 - 9 - 11 - 12 - 11 - 9 - 7 - 9 - 7 - 4 - 2 - 4 - 7 - 4 - 2 - 0 - 2 - 4 - 7 - 9 - 11 - 9 - 7 - - - - - - -',
+      kick: 'x...x...x...x.x.', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.xx',
+      w: { lead: 'sawtooth', arp: 'square', bass: 'sawtooth' }, v: { lead: 0.38, arp: 0.08, bass: 0.42 },
     },
   };
 
