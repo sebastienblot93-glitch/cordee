@@ -18,13 +18,21 @@
   /* ---------- Sauvegarde ---------- */
   const SD = window.SaveData;
   const TEAM_KEY = 'cordee.team';
-  let data = SD.blank();
-  try {
-    const j = JSON.parse(localStorage.getItem(KEY));
-    if (j) data = SD.sanitize(j);
-  } catch { /* ignore */ }
+  // Chaque code d'équipe a sa propre sauvegarde : records, étoiles et reprise ne se mélangent jamais d'un code à l'autre.
+  // Sans code, on utilise la sauvegarde « de ce navigateur » (clé d'origine).
+  let team = '';
+  try { team = localStorage.getItem(TEAM_KEY) || ''; } catch { /* ignore */ }
+  const keyFor = (t) => (t ? `${KEY}.${t}` : KEY);
+  function loadLocal(t) {
+    try {
+      const j = JSON.parse(localStorage.getItem(keyFor(t)));
+      if (j) return SD.sanitize(j);
+    } catch { /* ignore */ }
+    return SD.blank();
+  }
+  let data = loadLocal(team);
   function saveLocal() {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignore */ }
+    try { localStorage.setItem(keyFor(team), JSON.stringify(data)); } catch { /* ignore */ }
   }
   function persist() {
     saveLocal();
@@ -46,8 +54,6 @@
   }
 
   /* ---------- Sauvegarde en ligne (code d'équipe) ---------- */
-  let team = '';
-  try { team = localStorage.getItem(TEAM_KEY) || ''; } catch { /* ignore */ }
   const TEAM_RE = /^[a-z0-9_-]{6,48}$/;
   // état : off (pas de code) | sync (en cours) | ok | error ; durable : la base du serveur est configurée
   const net = { state: team ? 'sync' : 'off', durable: null, err: '', bad: '' };
@@ -92,6 +98,7 @@
     dirty = false;
     clearTimeout(retryTimer);
     if (net.state !== 'ok') { net.state = 'sync'; renderNet(); }
+    const reqTeam = team;
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     const to = setTimeout(() => ctl && ctl.abort(), 12000);
     return fetch(`/api/team/${encodeURIComponent(team)}`, {
@@ -100,12 +107,14 @@
     })
       .then((r) => r.json().catch(() => ({ ok: false })).then((j) => { if (!j.ok) throw new Error(j.error || 'Serveur indisponible.'); return j; }))
       .then((j) => {
+        if (reqTeam !== team) return; // le code a changé entretemps : cette réponse concerne l'ancienne équipe
         merge(j.data, true);
         net.state = 'ok';
         net.durable = !!j.durable;
         renderAll();
       })
       .catch((e) => {
+        if (reqTeam !== team) return;
         net.state = 'error';
         net.err = e && e.name !== 'AbortError' && e.message && e.message !== 'Failed to fetch' ? e.message : 'Serveur injoignable.';
         retryTimer = setTimeout(sync, 20000);
@@ -138,14 +147,26 @@
       return false;
     }
     net.bad = '';
-    team = code;
+    if (code !== team) {
+      // autre équipe : on met la sauvegarde actuelle de côté et on charge celle de la nouvelle équipe (vide si elle est nouvelle)
+      saveLocal();
+      team = code;
+      data = loadLocal(team);
+      clearTimeout(pushTimer);
+      dirty = false;
+      askedResume = false;
+      pendingResume = null;
+      $('resume').classList.remove('show');
+      firstSync = !team;
+    }
     if ($('team-code')) $('team-code').value = code;
     try { if (code) localStorage.setItem(TEAM_KEY, code); else localStorage.removeItem(TEAM_KEY); } catch { /* ignore */ }
     net.err = '';
     net.state = code ? 'sync' : 'off';
     clearTimeout(retryTimer);
     renderNet();
-    if (code) { dirty = true; sync(); } else renderAll();
+    renderAll();
+    if (code) { dirty = true; sync(); } else { firstSync = true; tryAskResume(); }
     return true;
   }
 
