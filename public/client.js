@@ -1164,7 +1164,10 @@ function renderLookPicker(root) {
     const cv = document.createElement('canvas');
     cv.width = 120; cv.height = 152;
     drawSkinThumb(cv, id, color, 30);
-    b.append(cv);
+    const nm = document.createElement('span');
+    nm.className = 'skin-name';
+    nm.textContent = Skins.names[id];
+    b.append(cv, nm);
     b.onclick = () => { look.skin = id; saveLook(); window.Sfx.play('click'); pushLook(); refreshPickers(); };
     grid.append(b);
   });
