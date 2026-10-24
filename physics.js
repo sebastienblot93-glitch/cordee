@@ -45,18 +45,19 @@
   // Légende des niveaux :
   //   #  bloc solide              .  vide
   //   S  départ                   D  porte de sortie (s'ouvre quand toutes les clés sont prises)
-  //   K  clé                      C  checkpoint (point de retour après une chute)
+  //   K  clé                      C  drapeau : validé quand les DEUX joueurs l'ont atteint, on y réapparaît après une chute
   //   1 2 3  plaques au sol       a b c  portes liées aux groupes 1 2 3
   //   x y z  cristaux (orbe du Mage) des groupes 1 2 3
   //   o p q  cibles (flèche de l'Archer) des groupes 1 2 3
   //   w v u  volets qui s'ouvrent et se ferment en rythme (groupes 1 2 3)
   //   h  bloc caché (solide, mais visible seulement près de la lumière du Mage)
   //   r  zone de rune : le Mage peut y poser un bloc de glace
-  //   ^  pics : un contact renvoie au dernier checkpoint
+  //   ^  pics : un contact renvoie au dernier drapeau validé
   //   j  ressort : un joueur qui retombe dessus est propulsé très haut
   //   t  bois : bloc solide que la flèche de feu de l'Archer brûle (et tout le bois relié)
   //   l  bloc lié : solide seulement quand les joueurs restent proches (COOP.linkDist)
   //   s  pont synchro : apparaît quelques secondes quand les joueurs sautent en même temps
+  //   *  étoile cachée (facultative) : on la ramasse en la touchant
   //   f g e  torches des groupes 1 2 3 : allumées par la flèche de feu, elles ouvrent leurs portes
   function parseLevel(def) {
     const rows = Array.isArray(def) ? def : def.rows;
@@ -82,6 +83,7 @@
     const targets = [];
     const spikes = [];
     const checkpoints = [];
+    const stars = [];
     const runes = [];
     let door = null;
     let spawn = { x: TILE, y: TILE };
@@ -108,6 +110,7 @@
         if (ch === 'S') spawn = { x: px + (TILE - PW) / 2, y: py + TILE - PH };
         if (ch === 'K') keys.push({ x: px, y: py });
         if (ch === 'C') checkpoints.push({ x: px, y: py });
+        if (ch === '*') stars.push({ x: px, y: py });
         if (ch === 'r') runes.push({ tx, ty });
         if (ch === '^') spikes.push({ x: px + 6, y: py + 18, w: TILE - 12, h: TILE - 18 }); // zone mortelle réduite : on frôle les pointes sans mourir
         if (ch >= '1' && ch <= '3') plates.push({ group: Number(ch), x: px, y: py + TILE - 8, w: TILE, h: 8 });
@@ -137,7 +140,7 @@
       solid, gate, shut, crystalAt, targetAt, hidden, rune, wood, spring, torchAt, link, sync,
       linkOn: true, // blocs liés présents (le serveur le met à jour à chaque tick)
       syncOn: false, // ponts synchro présents
-      keys, plates, crystals, targets, torches, spikes, checkpoints, runes, door, spawn, w, h, cfg,
+      keys, plates, crystals, targets, torches, spikes, checkpoints, stars, runes, door, spawn, w, h, cfg,
       burnt: new Set(), // blocs de bois brûlés (index ty * w + tx)
       open: new Set(), // numéros de portes ouvertes
       pressed: new Set(), // plaques pressées
