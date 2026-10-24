@@ -64,7 +64,7 @@ function loadLook() {
     const j = JSON.parse(localStorage.getItem('cordee.look'));
     if (j && Skins.ids.includes(j.skin) && Skins.colors.includes(j.color)) return j;
   } catch { /* pas de stockage */ }
-  return { skin: 'classic', color: Skins.colors[1] };
+  return { skin: 'tasse', color: Skins.colors[1] };
 }
 const look = loadLook();
 function saveLook() {
@@ -1242,7 +1242,7 @@ function renderPlayerList() {
     const li = document.createElement('li');
     const cv = document.createElement('canvas');
     cv.width = 80; cv.height = 104;
-    drawSkinThumb(cv, p.skin || 'classic', p.color, 30);
+    drawSkinThumb(cv, p.skin || 'tasse', p.color, 30);
     const name = document.createElement('span');
     name.textContent = p.name;
     const role = document.createElement('span');
@@ -2646,7 +2646,7 @@ function drawEmote(p, cx, top, mine) {
 
 function drawPlayer(p, s, frame) {
   const kit = level.cfg.abilities ? p.role : 'plain';
-  const skin = p.skin || 'classic';
+  const skin = p.skin || 'tasse';
   const casting = s.castT > 0;
   const dir = casting && Math.abs(Math.cos(s.castAng)) > 0.25 ? Math.sign(Math.cos(s.castAng)) : (s.face || 1);
   const vy = s.y - s.py;
