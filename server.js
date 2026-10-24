@@ -21,10 +21,10 @@ const app = express();
 app.get('/physics.js', (req, res) => res.sendFile(path.join(__dirname, 'physics.js')));
 
 // Version du jeu : visible sur /diag pour vérifier que la mise à jour est bien en ligne
-const BUILD = 'v2 - 24 niveaux, skins, sons';
+const BUILD = 'v3 - 30 niveaux, médailles, records, étoiles';
 const fs = require('fs');
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const WEB_FILES = ['index.html', 'client.js', 'audio.js', 'skins.js', 'themes.js'];
+const WEB_FILES = ['index.html', 'client.js', 'progress.js', 'audio.js', 'skins.js', 'themes.js'];
 
 // Pas de cache : le navigateur recharge toujours la dernière version du jeu
 app.use((req, res, next) => {
@@ -34,7 +34,7 @@ app.use((req, res, next) => {
 
 // Si un fichier du site a été envoyé par erreur à la racine du dépôt (au lieu de public/),
 // on sert quand même cette copie : c'est la plus récente.
-app.get(['/', '/index.html', '/client.js', '/audio.js', '/skins.js', '/themes.js'], (req, res, next) => {
+app.get(['/', '/index.html', '/client.js', '/progress.js', '/audio.js', '/skins.js', '/themes.js'], (req, res, next) => {
   const name = req.path === '/' ? 'index.html' : req.path.slice(1);
   const rootCopy = path.join(__dirname, name);
   if (fs.existsSync(rootCopy)) return res.sendFile(rootCopy);
@@ -46,8 +46,8 @@ app.get('/diag', (req, res) => {
   const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
   const lines = [
     'Cordée - ' + BUILD,
-    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 24)',
-    'Chapitres : ' + CHAPTERS.length + ' (attendu : 7)',
+    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 30)',
+    'Chapitres : ' + CHAPTERS.length + ' (attendu : 8)',
     '',
     'Fichiers dans public/ :',
     ...WEB_FILES.map((f) => '  ' + f + ' : ' + size(path.join(PUBLIC_DIR, f))),
@@ -57,6 +57,17 @@ app.get('/diag', (req, res) => {
   ];
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.end(lines.join('\n'));
+});
+
+// Liste des niveaux (noms, chronos, seuils de médailles) : sert aux panneaux de records et d'étoiles
+app.get('/api/levels', (req, res) => {
+  res.json({
+    levels: LEVELS.map((l) => ({
+      name: l.name, chapter: l.chapter, timer: l.timer || 0, gold: l.gold, silver: l.silver,
+      star: l.rows.some((r) => r.includes('*')),
+    })),
+    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
+  });
 });
 
 app.use(express.static(PUBLIC_DIR));
@@ -266,6 +277,16 @@ function collectKeys(room, list) {
   });
 }
 
+function collectStars(room, list) {
+  const st = room.level.stars[0];
+  if (!st || room.starTaken) return;
+  const zone = { x: st.x + 2, y: st.y + 2, w: TILE - 4, h: TILE - 4 };
+  if (list.some((p) => touchesRect(p, zone))) {
+    room.starTaken = true;
+    room.events.push(['star', st.x + TILE / 2, st.y + TILE / 2]);
+  }
+}
+
 function doorOpen(room) {
   return room.keysTaken.size >= room.level.keys.length;
 }
@@ -469,6 +490,9 @@ function startMsg(room) {
     name: def.name,
     hint: def.hint,
     timer: def.timer || 0, // secondes (0 = pas de minuteur)
+    gold: def.gold, // médaille d'or : temps (en secondes) à ne pas dépasser
+    silver: def.silver,
+    star: def.rows.some((r) => r.includes('*')),
     chapter: chapterInfo(room.levelIndex),
     cfg: {
       abilities: !!def.abilities,
@@ -499,6 +523,8 @@ function freshRoomState(room, index) {
   room.cpSeen = new Map(); // drapeau -> joueurs qui l'ont atteint
   room.respawn = { ...room.level.spawn };
   room.deaths = 0;
+  room.starTaken = false;
+  room.result = null;
   room.latch = {};
   room.crystalUntil = room.level.crystals.map(() => 0);
   room.targetUntil = room.level.targets.map(() => 0);
@@ -520,14 +546,11 @@ function loadLevel(room, index) {
   broadcast(room, startMsg(room));
 }
 
-function finishLevel(room) {
-  if (room.levelIndex >= LEVELS.length - 1) {
-    room.status = 'finished';
-    room.timer = 420; // 7 secondes
-  } else {
-    room.status = 'won';
-    room.timer = 150; // 2,5 secondes
-  }
+function finishLevel(room, skipped) {
+  // résultat du niveau : le temps compte depuis le début (hors pauses), les chutes depuis le dernier redémarrage
+  room.result = { time: room.clock, deaths: room.deaths, star: room.starTaken, skipped: !!skipped };
+  room.timer = 900; // écran de résultat : 15 secondes (le chef peut passer plus vite)
+  room.status = room.levelIndex >= LEVELS.length - 1 ? 'finished' : 'won';
 }
 
 function backToLobby(room) {
@@ -561,6 +584,8 @@ function stateMsg(room, list) {
     ice: room.ice.map((b) => [b.idx % L.w, Math.floor(b.idx / L.w), b.until - t]),
     proj: room.projectiles.map((pr) => [pr.kind, Math.round(pr.x * 10) / 10, Math.round(pr.y * 10) / 10, Math.round(pr.vx * 100) / 100, Math.round(pr.vy * 100) / 100]),
     cps: [...room.cps],
+    sr: room.starTaken ? 1 : 0,
+    res: room.result,
     cph: [...room.cpSeen].filter(([i, set]) => !room.cps.has(i) && set.size > 0).map(([i]) => i),
     cd: list.map((p) => [
       p.id,
@@ -613,6 +638,7 @@ function tick(room) {
   }
   resolvePlayers(L, list);
   collectKeys(room, list);
+  collectStars(room, list);
   hazardsAndCheckpoints(room, list);
   stepProjectiles(room);
   stepBurn(room);
@@ -627,7 +653,7 @@ function tick(room) {
   room.time++;
 
   if (room.status === 'playing') {
-    if (room.limit) room.clock++;
+    room.clock++;
     if (doorOpen(room) && allInDoor(room, list)) finishLevel(room);
     else if (room.limit && room.clock >= room.limit) {
       room.status = 'timeup'; // temps écoulé : on laisse lire le message puis le niveau redémarre
@@ -828,13 +854,19 @@ wss.on('connection', (ws) => {
       }
       case 'restart': {
         // N'importe quel joueur peut recommencer le niveau (utile si on est coincé)
-        if (!room || room.status !== 'playing') return;
+        if (!room) return;
+        if (room.status === 'won' || room.status === 'finished') { // depuis l'écran de résultat : le chef rejoue le niveau
+          if (room.hostId !== ws.id) return;
+        } else if (room.status !== 'playing') return;
         loadLevel(room, room.levelIndex);
         break;
       }
       case 'skip': {
-        if (!room || room.hostId !== ws.id || room.status !== 'playing') return;
-        if (room.levelIndex >= LEVELS.length - 1) finishLevel(room);
+        if (!room || room.hostId !== ws.id) return;
+        if (room.status === 'won') loadLevel(room, room.levelIndex + 1); // le chef passe l'écran de résultat
+        else if (room.status === 'finished') backToLobby(room);
+        else if (room.status !== 'playing') return;
+        else if (room.levelIndex >= LEVELS.length - 1) finishLevel(room, true);
         else loadLevel(room, room.levelIndex + 1);
         break;
       }

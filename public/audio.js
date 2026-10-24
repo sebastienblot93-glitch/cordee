@@ -104,6 +104,8 @@
     torch: () => { noise(0.3, 0.45, 1400); tone(180, 360, 0.3, 'sawtooth', 0.15); },
     burn: () => { noise(0.35, 0.45, 1200); },
     key: () => { tone(988, 988, 0.1, 'square', 0.3); tone(1319, 1319, 0.2, 'square', 0.3, 0.09); },
+    star: () => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, f, 0.2, 'triangle', 0.32, i * 0.07)); tone(2637, 2637, 0.35, 'sine', 0.2, 0.3); },
+    medal: () => { [659, 784, 988, 1319].forEach((f, i) => tone(f, f, 0.25, 'triangle', 0.3, 0.1 + i * 0.1)); },
     checkpoint: () => { tone(523, 523, 0.1, 'triangle', 0.4); tone(784, 784, 0.18, 'triangle', 0.4, 0.1); },
     door: () => { tone(330, 660, 0.3, 'triangle', 0.4); tone(494, 988, 0.3, 'triangle', 0.3, 0.1); },
     die: () => { tone(400, 70, 0.35, 'sawtooth', 0.35); noise(0.2, 0.4, 900); },
