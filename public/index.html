@@ -32,6 +32,7 @@
     body[data-theme=forge] { background: #2c1109; }
     body[data-theme=mist] { background: #1b2a3a; }
     body[data-theme=summit] { background: #1a1230; }
+    body[data-theme=citadel] { background: #1a0a22; }
     h1, h2, button, .code { font-family: 'Silkscreen', 'Courier New', monospace; }
     h1 { font-size: clamp(2.2rem, 8vw, 4rem); margin: 0 0 .25rem; letter-spacing: .02em; }
     h2 { font-size: 1.1rem; margin: 0 0 1rem; font-weight: 400; color: var(--muted); }
@@ -66,6 +67,23 @@
 
     #game-wrap { position: relative; width: min(960px, 96vw); overflow: hidden; background: #0d0d26; border-radius: 10px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px -4px var(--accent); transition: box-shadow .8s; }
     canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: auto; will-change: transform; }
+    #boss-hud { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: min(540px, 74%); display: none; pointer-events: none; z-index: 3; font-family: 'Silkscreen', monospace; text-shadow: 0 2px 4px #000; }
+    #boss-hud.on { display: block; }
+    .bh-top { display: flex; justify-content: space-between; font-size: .72rem; letter-spacing: .04em; color: #ffd9f0; margin-bottom: 3px; }
+    .bh-bar { position: relative; height: 14px; border-radius: 8px; background: rgba(20, 8, 30, .85); box-shadow: 0 0 0 2px #1a0a28, 0 0 0 3px #b3508f; overflow: hidden; }
+    .bh-bar i { position: absolute; inset: 0 auto 0 0; width: 100%; background: linear-gradient(#ff7ac0, #c22a78); transition: width .25s; }
+    .bh-bar.hit i { background: linear-gradient(#fff, #ffc2e4); }
+    .bh-bar u { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0, 0, 0, .65); }
+    #bh-shield { font-size: .6rem; text-align: center; margin: 3px 0 0; color: #d8a8ff; min-height: 1em; }
+    #bh-shield.down { color: #7dfcff; animation: bhblink .5s infinite alternate; }
+    @keyframes bhblink { to { opacity: .55; } }
+    #team-hud { position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 8px; pointer-events: none; z-index: 3; background: rgba(8, 4, 16, .78); padding: 3px 12px; border-radius: 12px; font-family: 'Silkscreen', monospace; text-shadow: 0 2px 4px #000; }
+    #team-hud.on { display: flex; }
+    .th-label { font-size: .6rem; color: #b8f5c0; }
+    #team-hp { display: inline-flex; gap: 4px; }
+    #team-hp i { width: 24px; height: 12px; border-radius: 6px; background: linear-gradient(#78f08c, #26a84a); box-shadow: 0 0 0 2px #0d2a16; transition: background .2s, transform .2s; }
+    #team-hp i.empty { background: #2a3a30; opacity: .6; }
+    #team-hp.hurt i:not(.empty):last-of-type { transform: scale(1.25); }
     #banner {
       position: absolute; inset: 0; display: none; place-items: center; text-align: center;
       font-family: 'Silkscreen', monospace; font-size: clamp(1.4rem, 5vw, 3rem); color: var(--accent);
@@ -362,7 +380,7 @@
         <p id="team-status" class="team-status">Tapez le même code sur chaque ordinateur : records, étoiles et niveau atteint se retrouvent à chaque session.</p>
       </div>
       <p id="menu-error" class="error" role="alert"></p>
-      <p style="text-align:center;opacity:.45;font-size:12px;margin-top:8px">Cordée v3 · 30 niveaux · 12 skins</p>
+      <p style="text-align:center;opacity:.45;font-size:12px;margin-top:8px">Cordée v3 · 34 niveaux · 12 skins</p>
     </section>
 
     <section id="screen-lobby" class="screen">
@@ -400,6 +418,12 @@
       <canvas id="canvas"></canvas>
       <div id="banner">Niveau réussi !</div>
       <div id="toast"></div>
+      <div id="boss-hud">
+        <div class="bh-top"><b id="bh-name"></b><span id="bh-phase"></span></div>
+        <div class="bh-bar"><i id="bh-fill"></i><u style="left:33%"></u><u style="left:66%"></u></div>
+        <div id="bh-shield"></div>
+      </div>
+      <div id="team-hud"><span class="th-label">Équipe</span><span id="team-hp"></span></div>
       <div id="result" role="dialog" aria-label="Résultat du niveau">
         <div class="card">
           <h3 id="res-title" style="font-weight:400"></h3>

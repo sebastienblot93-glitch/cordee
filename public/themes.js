@@ -74,6 +74,10 @@
       label: 'Sommet', sky: ['#0b1030', '#d9627f'], light: false,
       tile: { base: '#4b5f82', dark: '#34445f', top: '#f1f7ff', topDark: '#bfd2ea', out: '#0f1a30', pattern: 'brick', frost: true, glow: '#8ec8ff' },
     },
+    citadel: {
+      label: 'Citadelle', sky: ['#12041e', '#7a1f5c'], light: false,
+      tile: { base: '#4d3a70', dark: '#30224d', top: '#9b78d6', topDark: '#664a9c', out: '#0b0516', pattern: 'brick', glow: '#ff6bd0' },
+    },
   };
 
   function get(id) { return THEMES[id] || THEMES.arcane; }
@@ -303,6 +307,22 @@
       sg.globalCompositeOperation = 'lighter';
       halo(sg, w * 0.74, h * 0.28, 150, '#f4fbff', 0.7);
       sg.globalCompositeOperation = 'source-over';
+    } else if (id === 'citadel') {
+      for (let i = 0; i < 80; i++) { // étoiles
+        sg.fillStyle = `rgba(255,220,240,${0.2 + r() * 0.5})`;
+        sg.beginPath();
+        sg.arc(r() * w, r() * h * 0.6, 0.5 + r() * 1.0, 0, TAU);
+        sg.fill();
+      }
+      sg.globalCompositeOperation = 'lighter';
+      halo(sg, w * 0.8, h * 0.28, 210, '#ff3a9a', 0.55); // lune rouge
+      sg.globalCompositeOperation = 'source-over';
+      sg.beginPath();
+      sg.arc(w * 0.8, h * 0.28, 42, 0, TAU);
+      sg.fillStyle = vgrad(sg, h * 0.28 - 42, h * 0.28 + 42, '#ffd9ec', '#d8609e');
+      sg.fill();
+      sg.fillStyle = 'rgba(120,30,80,.3)';
+      [[-12, -8, 7], [10, 6, 9], [8, -16, 4], [-14, 14, 5]].forEach(([dx, dy, rr]) => { sg.beginPath(); sg.arc(w * 0.8 + dx, h * 0.28 + dy, rr, 0, TAU); sg.fill(); });
     } else if (id === 'summit') {
       for (let i = 0; i < 90; i++) { // étoiles
         sg.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.5})`;
@@ -651,6 +671,47 @@
       });
       L(0.75, (g) => {
         for (let i = 0; i < 7; i++) pine(g, xr(), h + 8, 1.2 + r() * 0.8, '#2a4458', 'rgba(8,16,24,.7)');
+      });
+    } else if (id === 'citadel') {
+      L(0.1, (g) => { // tours lointaines
+        g.fillStyle = '#2c1245';
+        for (let x = -m; x < w + m; x += 46 + r() * 30) {
+          const tw = 22 + r() * 22;
+          const th2 = h * (0.28 + r() * 0.3);
+          g.beginPath();
+          g.rect(x, h * 0.78 - th2, tw, th2 + h * 0.22);
+          g.moveTo(x - 4, h * 0.78 - th2);
+          g.lineTo(x + tw / 2, h * 0.78 - th2 - 24 - r() * 18);
+          g.lineTo(x + tw + 4, h * 0.78 - th2);
+          g.fill();
+        }
+      });
+      L(0.35, (g) => { // rempart avec créneaux et fenêtres allumées
+        const y0 = h * 0.62;
+        g.fillStyle = '#1e0c33';
+        g.fillRect(-m, y0, w + m * 2, h - y0);
+        for (let x = -m; x < w + m; x += 26) g.fillRect(x, y0 - 12, 14, 12);
+        for (let i = 0; i < 14; i++) {
+          const x = xr();
+          const y = y0 + 20 + r() * (h * 0.22);
+          g.fillStyle = r() < 0.5 ? '#ffb86b' : '#ff7ac0';
+          g.globalAlpha = 0.55;
+          g.beginPath();
+          g.roundRect(x, y, 7, 13, [4, 4, 0, 0]);
+          g.fill();
+          g.globalAlpha = 1;
+        }
+      });
+      L(0.75, (g) => { // colonnes au premier plan
+        for (let i = 0; i < 5; i++) {
+          const x = xr();
+          const cw = 22 + r() * 14;
+          g.fillStyle = '#12061f';
+          g.fillRect(x, h * 0.35, cw, h);
+          g.fillRect(x - 5, h * 0.35 - 8, cw + 10, 10);
+          g.fillStyle = 'rgba(255,120,200,.08)';
+          g.fillRect(x + 3, h * 0.35, 4, h);
+        }
       });
     } else if (id === 'summit') {
       L(0.1, (g) => { // pics lointains enneigés
@@ -1112,7 +1173,7 @@
   function makeDecor(id, w, h, seed) {
     const r = rng(seed * 131 + 5);
     const items = [];
-    const n = { prairie: 40, arcane: 100, dark: 40, sanctuary: 60, garden: 56, forge: 70, mist: 40, summit: 70 }[id] || 30;
+    const n = { prairie: 40, arcane: 100, dark: 40, sanctuary: 60, garden: 56, forge: 70, mist: 40, summit: 70, citadel: 64 }[id] || 30;
     for (let i = 0; i < n; i++) items.push({ x: r() * w, y: r() * h, s: 0.5 + r(), p: r() * TAU, k: r(), i });
     return items;
   }
@@ -1446,6 +1507,20 @@
         g.arc(x, y, 0.9 + o.s * 1.1, 0, TAU);
         g.fill();
       });
+    } else if (id === 'citadel') {
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      items.forEach((o, i) => { // braises qui montent, chauve-souris
+        if (i < 6) return;
+        const x = o.x + Math.sin(t * 0.02 + o.p) * 18;
+        const y = wrap(o.y - t * (0.25 + o.s * 0.3), h);
+        halo(g, x, y, 3 + o.s * 2.4, i % 3 ? '#ff5ab0' : '#ffb04a', 0.35 + 0.3 * Math.sin(t * 0.05 + o.p));
+      });
+      g.restore();
+      for (let i = 0; i < 6; i++) {
+        const o = items[i];
+        bird(g, wrap(o.x + t * (0.6 + o.s * 0.3), w + 100) - 50, 30 + (o.y % 140), 1.1, Math.sin(t * 0.25 + o.p), 'rgba(10,2,20,.8)');
+      }
     } else if (id === 'mist') {
       items.forEach((o, i) => {
         if (i < 10) {
@@ -1477,6 +1552,15 @@
         g.ellipse(x, o.y * 0.9 + 20, 270, 30, 0, 0, TAU);
         g.fill();
       }
+    } else if (id === 'citadel') {
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      const k = g.createLinearGradient(0, h * 0.8, 0, h);
+      k.addColorStop(0, 'rgba(255,60,160,0)');
+      k.addColorStop(1, `rgba(255,60,160,${0.10 + 0.04 * Math.sin(frame * 0.05)})`);
+      g.fillStyle = k;
+      g.fillRect(0, h * 0.8, w, h * 0.2);
+      g.restore();
     } else if (id === 'forge') {
       g.save();
       g.globalCompositeOperation = 'lighter';

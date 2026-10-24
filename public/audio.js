@@ -90,7 +90,7 @@
   }
 
   // Chaque chapitre a sa « voix » de saut
-  const JUMP_WAVE = { prairie: 'square', arcane: 'triangle', dark: 'sine', sanctuary: 'triangle', garden: 'sine', forge: 'sawtooth', mist: 'sine', summit: 'sawtooth' };
+  const JUMP_WAVE = { prairie: 'square', arcane: 'triangle', dark: 'sine', sanctuary: 'triangle', garden: 'sine', forge: 'sawtooth', mist: 'sine', summit: 'sawtooth', citadel: 'sawtooth' };
   let jumpWave = 'square';
 
   const SOUNDS = {
@@ -108,6 +108,16 @@
     burn: () => { noise(0.35, 0.45, 1200); },
     key: () => { tone(988, 988, 0.1, 'square', 0.3); tone(1319, 1319, 0.2, 'square', 0.3, 0.09); },
     star: () => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, f, 0.2, 'triangle', 0.32, i * 0.07)); tone(2637, 2637, 0.35, 'sine', 0.2, 0.3); },
+    hurt: () => { noise(0.25, 0.5, 900); tone(220, 90, 0.28, 'sawtooth', 0.35); },
+    bhit: () => { tone(300, 150, 0.1, 'square', 0.35); tone(900, 1400, 0.12, 'triangle', 0.3, 0.02); },
+    bblock: () => { tone(1500, 1100, 0.07, 'triangle', 0.25); noise(0.05, 0.2, 5000); },
+    bphase: () => { noise(0.9, 0.55, 700); tone(180, 50, 0.9, 'sawtooth', 0.45); tone(260, 70, 0.8, 'square', 0.2, 0.05); },
+    sdown: () => { [1568, 1175, 880, 659].forEach((f, i) => tone(f, f * 0.6, 0.22, 'triangle', 0.3, i * 0.06)); noise(0.3, 0.3, 4000); },
+    sup: () => { tone(300, 700, 0.3, 'sine', 0.35); tone(150, 350, 0.3, 'triangle', 0.3); },
+    bdie: () => { noise(1.4, 0.6, 900); [440, 330, 220, 110].forEach((f, i) => tone(f, f / 3, 0.5, 'sawtooth', 0.35, i * 0.18)); setTimeout(() => {}, 0); },
+    rock: () => { noise(0.2, 0.5, 500); tone(110, 55, 0.18, 'square', 0.3); },
+    ballpop: () => { tone(800, 300, 0.1, 'triangle', 0.3); noise(0.08, 0.25, 3000); },
+    warn: () => { tone(440, 440, 0.07, 'square', 0.22); tone(330, 330, 0.07, 'square', 0.22, 0.1); },
     mark: () => { tone(880, 1320, 0.14, 'sine', 0.35); tone(1760, 1760, 0.22, 'sine', 0.22, 0.1); },
     medal: () => { [659, 784, 988, 1319].forEach((f, i) => tone(f, f, 0.25, 'triangle', 0.3, 0.1 + i * 0.1)); },
     checkpoint: () => { tone(523, 523, 0.1, 'triangle', 0.4); tone(784, 784, 0.18, 'triangle', 0.4, 0.1); },
@@ -211,6 +221,15 @@
       lead: '7 - 9 - 11 - 9 - 7 - 4 - 7 - 9 - 11 - 12 - 11 - 9 - 7 - 9 - 7 - 4 - 2 - 4 - 7 - 4 - 2 - 0 - 2 - 4 - 7 - 9 - 11 - 9 - 7 - - - - - - -',
       kick: 'x...x...x...x.x.', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.xx',
       w: { lead: 'sawtooth', arp: 'square', bass: 'sawtooth' }, v: { lead: 0.38, arp: 0.08, bass: 0.42 },
+    },
+    // 9. La Citadelle : le boss final, sombre et martelé (mi mineur), tempo très soutenu
+    citadel: {
+      bpm: 152, tonic: 52, scale: MINOR, bo: -12,
+      prog: [[0, MIN], [8, MAJ], [10, MAJ], [7, MAJ]],
+      bass: '0.00.0.20.00.0.3', arp: '0.2.1.2.0.2.3.2.',
+      lead: '7 - - 7 9 - 7 - 4 - - 4 5 - 4 - 5 - - 5 7 - 5 - 2 - - 2 4 - 2 - 3 - - 3 5 - 3 - 1 - - 1 2 - 4 - 4 - 5 - 7 - 9 - 11 - - - 9 - - -',
+      kick: 'x..xx..xx..xx.x.', snare: '....x.......x..x', hat: 'x.x.x.x.x.x.xxxx',
+      w: { lead: 'sawtooth', arp: 'square', bass: 'sawtooth' }, v: { lead: 0.4, arp: 0.09, bass: 0.45 },
     },
   };
 
