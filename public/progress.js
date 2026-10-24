@@ -14,7 +14,7 @@
   };
   const RANK_MEDAL = [null, 'bronze', 'silver', 'gold', 'diamond'];
   // Titres débloqués avec les étoiles
-  const TITLES = [[0, 'Promeneur'], [3, 'Randonneur'], [8, 'Éclaireur'], [14, 'Grimpeur'], [20, 'Alpiniste'], [26, 'Maître de cordée'], [30, 'Étoile du Sommet']];
+  const TITLES = [[0, 'Promeneur'], [3, 'Randonneur'], [8, 'Éclaireur'], [14, 'Grimpeur'], [20, 'Alpiniste'], [26, 'Maître de cordée'], [30, 'Étoile du Sommet'], [34, 'Briseur de Citadelle']];
 
   /* ---------- Sauvegarde ---------- */
   const SD = window.SaveData;
