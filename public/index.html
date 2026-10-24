@@ -298,6 +298,14 @@
     #hud-timer.bronze { color: #e0a070; }
     #hud-timer.warn { color: #ffb040; }
     #hud-timer.urgent { color: var(--danger); }
+    .opt { opacity: .55; font-weight: 400; font-size: .75rem; }
+    .team-status { font-size: .75rem; line-height: 1.4; color: var(--muted); margin: .5rem 0 0; }
+    .team-status.ok { color: #4ade80; }
+    .team-status.warn { color: #fbbf24; }
+    .team-status.bad { color: var(--danger); }
+    .sync-line { font-size: .68rem; text-align: center; color: var(--muted); margin-top: .5rem; }
+    .sync-line.ok { color: #4ade80; }
+    .sync-line.warn { color: #fbbf24; }
     #btn-hint { padding: .3rem .8rem; font-size: .75rem; margin-left: .5rem; }
     @media (prefers-reduced-motion: reduce) { #result .card, #res-medal { animation: none; } }
   </style>
@@ -328,6 +336,14 @@
           <input id="code" maxlength="4" placeholder="ABCD" autocomplete="off">
           <button id="btn-join" class="ghost">Rejoindre</button>
         </div>
+      </div>
+      <div class="panel" id="team-panel">
+        <label for="team-code">☁ Code d’équipe <span class="opt">(sauvegarde en ligne)</span></label>
+        <div class="row">
+          <input id="team-code" maxlength="48" placeholder="ex. seb-alex-7391" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button id="team-save" class="ghost" type="button">Valider</button>
+        </div>
+        <p id="team-status" class="team-status">Tapez le même code sur chaque ordinateur : records, étoiles et niveau atteint se retrouvent à chaque session.</p>
       </div>
       <p id="menu-error" class="error" role="alert"></p>
       <p style="text-align:center;opacity:.45;font-size:12px;margin-top:8px">Cordée v3 · 30 niveaux · 13 skins</p>
@@ -452,6 +468,7 @@
   <script src="audio.js"></script>
   <script src="skins.js"></script>
   <script src="themes.js"></script>
+  <script src="/savedata.js"></script>
   <script src="progress.js"></script>
   <script src="client.js"></script>
 </body>
