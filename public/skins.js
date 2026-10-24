@@ -1304,9 +1304,205 @@
     },
   };
 
+  /* 13. Sylvain Durif (caricature douce : longue chevelure, grande barbe, tunique claire) */
+  STYLES.durif = {
+    tone: '#f0c9a2', pants: '#e6e0d0', shoe: '#8a6a44',
+    body: () => '#f4f1e8', arm: () => '#f4f1e8',
+    back(g, P, o, C) {
+      // longue chevelure derrière la tête et les épaules
+      const sw = Math.sin(P.t * 0.09) * 1.2 + (P.walk > 0.05 ? Math.sin(P.ph) * 1.6 : 0) + (P.air ? (P.up ? 2.4 : -1.6) : 0);
+      g.beginPath();
+      g.moveTo(HX - 9.4, HY - 3);
+      g.quadraticCurveTo(HX - 14.6, HY + 6, HX - 12.2 - sw * 0.4, HY + 14.4);
+      g.quadraticCurveTo(HX - 11 - sw, HY + 19.6, HX - 6.6 - sw * 0.6, HY + 17.6);
+      g.quadraticCurveTo(HX - 2, HY + 12, HX + 4, HY + 6);
+      g.lineTo(HX + 4, HY - 6);
+      g.closePath();
+      paint(g, grad(g, 0, HY - 4, 0, HY + 19, '#6a5444', '#3f3026'), 1.4);
+      g.strokeStyle = 'rgba(190,170,150,.55)';
+      g.lineWidth = 0.9;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(HX - 9.6, HY + 1);
+      g.quadraticCurveTo(HX - 11.6 - sw * 0.3, HY + 8, HX - 9.4 - sw * 0.6, HY + 15.4);
+      g.stroke();
+    },
+    torso(g, P, o, C) {
+      // tunique longue, plissée, avec une écharpe de la couleur du joueur
+      g.beginPath();
+      g.moveTo(-6.8, -10.6);
+      g.lineTo(7, -10.6);
+      g.lineTo(8.4, -3.6);
+      g.quadraticCurveTo(0.8, -1.8 + Math.sin(P.t * 0.12) * 0.5, -8, -3.6);
+      g.closePath();
+      paint(g, grad(g, 0, -10.6, 0, -2.4, '#f6f3ea', '#d9d3c2'), 1.4);
+      g.strokeStyle = 'rgba(120,110,90,.35)';
+      g.lineWidth = 0.9;
+      g.beginPath();
+      g.moveTo(-2.4, -9.6); g.lineTo(-3.4, -3.4);
+      g.moveTo(2.6, -9.6); g.lineTo(3.8, -3.4);
+      g.stroke();
+      // écharpe en diagonale
+      g.beginPath();
+      g.moveTo(-6.4, -20.6);
+      g.lineTo(-2.6, -21);
+      g.lineTo(6.8, -11.4);
+      g.lineTo(3.2, -10.4);
+      g.closePath();
+      paint(g, C.col, 1.2);
+      // petite cordelette dorée à la taille
+      box(g, -6.8, -11.2, 13.8, 1.7, 0.8, '#d9b24a', 1);
+    },
+    head(g, P, o, C) {
+      humanHead(g, P, o, this, undefined, { noMouth: true, noBlush: true });
+      // barbe fournie qui descend sur la poitrine
+      const sway = Math.sin(P.t * 0.1) * 0.6;
+      g.beginPath();
+      g.moveTo(HX - 7.4, HY + 1.6);
+      g.quadraticCurveTo(HX - 9.4, HY + 10.4, HX - 2.4, HY + 15.4 + sway);
+      g.quadraticCurveTo(HX + 1.6, HY + 19, HX + 5.6, HY + 14.2 + sway);
+      g.quadraticCurveTo(HX + 11, HY + 10.6, HX + 9.8, HY + 2.2);
+      g.quadraticCurveTo(HX + 5.4, HY + 5.2, HX + 1, HY + 3.6);
+      g.quadraticCurveTo(HX - 3.4, HY + 5.2, HX - 7.4, HY + 1.6);
+      g.closePath();
+      paint(g, grad(g, 0, HY + 2, 0, HY + 19, '#7a6350', '#4a392d'), 1.4);
+      g.strokeStyle = 'rgba(210,198,184,.55)';
+      g.lineWidth = 0.9;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(HX - 3.6, HY + 7.4); g.quadraticCurveTo(HX - 3, HY + 11.6, HX - 1.6, HY + 14.2);
+      g.moveTo(HX + 5.2, HY + 7.6); g.quadraticCurveTo(HX + 5.6, HY + 11, HX + 4.4, HY + 13.4);
+      g.stroke();
+      // moustache et petit sourire
+      ell(g, HX + 4, HY + 4.4, 4.4, 1.5, '#6a5444', 1, 0.08);
+      g.strokeStyle = OUT;
+      g.lineWidth = 1.1;
+      g.beginPath();
+      g.arc(HX + 4.2, HY + 6.4, 1.7, 0.2 * Math.PI, 0.8 * Math.PI);
+      g.stroke();
+      // sourcils calmes
+      g.strokeStyle = '#4a392d';
+      g.lineWidth = 1.5;
+      g.beginPath();
+      g.moveTo(HX - 1.4, HY - 3.1); g.lineTo(HX + 2.6, HY - 3.7);
+      g.moveTo(HX + 4.4, HY - 3.7); g.lineTo(HX + 8, HY - 3);
+      g.stroke();
+      // cheveux : calotte et raie au milieu, mèches qui tombent devant l'oreille
+      g.beginPath();
+      g.moveTo(HX - 9.8, HY + 1.4);
+      g.quadraticCurveTo(HX - 11.4, HY - 9.4, HX - 1, HY - 10.6);
+      g.quadraticCurveTo(HX + 9, HY - 11.4, HX + 9.8, HY - 3.4);
+      g.quadraticCurveTo(HX + 4.6, HY - 6.6, HX + 0.6, HY - 5.2);
+      g.quadraticCurveTo(HX - 4.6, HY - 6, HX - 6.6, HY + 1.2);
+      g.quadraticCurveTo(HX - 7.6, HY + 6.4, HX - 9.8, HY + 1.4);
+      g.closePath();
+      paint(g, grad(g, 0, HY - 11, 0, HY + 2, '#6a5444', '#4a392d'), 1.4);
+      g.strokeStyle = 'rgba(190,170,150,.55)';
+      g.lineWidth = 0.9;
+      g.beginPath();
+      g.moveTo(HX - 4.4, HY - 8.6); g.quadraticCurveTo(HX + 1, HY - 10, HX + 6, HY - 7.4);
+      g.stroke();
+    },
+  };
+
+  /* 14. Ogre (personnage original : peau bleu-gris, petites cornes, défenses) */
+  STYLES.ogre = {
+    tone: '#8fa9c4', pants: '#6b4f35', shoe: '#3b2b20', armW: 5, legW: 5.4,
+    body: () => '#8fa9c4', arm: () => '#8fa9c4',
+    torso(g, P, o, C) {
+      // ventre rond et clair, harnais de cuir de la couleur du joueur, collier de fourrure
+      ell(g, 0.4, -14.4, 4.6, 4.6, '#a9c0d8', 0);
+      g.beginPath();
+      g.moveTo(-6.6, -20.8);
+      g.lineTo(-2.4, -21);
+      g.lineTo(7, -10.6);
+      g.lineTo(3.4, -9.8);
+      g.closePath();
+      paint(g, C.col, 1.2);
+      g.fillStyle = '#d9c36a';
+      g.fillRect(1.6, -14.2, 2, 2);
+      box(g, -6.8, -11.2, 13.8, 2.4, 1, '#4a3320', 1.1);
+      g.fillStyle = '#d9c36a';
+      g.fillRect(-0.6, -11, 2.8, 2);
+      // fourrure sur les épaules
+      g.beginPath();
+      g.moveTo(-8, -20);
+      for (let i = 0; i < 6; i++) g.lineTo(-8 + i * 3.1 + 1.5, -17.4 + (i % 2 ? 0 : 1.8));
+      g.lineTo(8.2, -20);
+      g.quadraticCurveTo(0, -23.8, -8, -20);
+      g.closePath();
+      paint(g, '#6b5a48', 1.2);
+    },
+    head(g, P, o, C) {
+      // petites cornes
+      [[-4.4, -1], [5.8, 1]].forEach(([dx, tilt]) => {
+        g.beginPath();
+        g.moveTo(HX + dx - 2.6, HY - 7.4);
+        g.quadraticCurveTo(HX + dx - 1 + tilt, HY - 12, HX + dx + tilt * 2.4, HY - 15.4);
+        g.quadraticCurveTo(HX + dx + 2.6 + tilt, HY - 11, HX + dx + 2.6, HY - 7.4);
+        g.closePath();
+        paint(g, grad(g, 0, HY - 15, 0, HY - 7, '#f0e6cc', '#b9a77c'), 1.3);
+      });
+      // crâne et grosse mâchoire
+      ell(g, HX, HY, 10.4, 9.4, this.tone, 1.6);
+      ell(g, HX + 0.8, HY + 4.4, 9.6, 5.8, this.tone, 1.4);
+      shine(g, HX - 3.2, HY - 4.8, 3.6, 2, -0.5, 0.22);
+      // taches de peau
+      g.fillStyle = 'rgba(60,90,130,.22)';
+      g.beginPath();
+      g.ellipse(HX - 5.6, HY + 1.2, 1.8, 1.2, 0, 0, TAU);
+      g.ellipse(HX + 8.6, HY - 4.2, 1.3, 0.9, 0, 0, TAU);
+      g.fill();
+      // yeux jaunes, sourcil lourd
+      const bl = P.t % 230 < 7 ? 0.14 : 1;
+      const lx = (o.look && o.look.x) || 0;
+      [HX + 0.6, HX + 6.2].forEach((ex) => {
+        ell(g, ex, HY + 0.2, 2.4, 2.6 * bl, '#f6e27a', 1.1);
+        if (bl > 0.5) {
+          g.fillStyle = '#2a1a0a';
+          g.beginPath();
+          g.arc(ex + 0.7 + lx * 0.8, HY + 0.4, 1.2, 0, TAU);
+          g.fill();
+        }
+      });
+      g.strokeStyle = '#2b3a55';
+      g.lineWidth = 2;
+      g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(HX - 2, HY - 3.8); g.lineTo(HX + 3.2, HY - 2);
+      g.moveTo(HX + 4.6, HY - 2); g.lineTo(HX + 9, HY - 3.6);
+      g.stroke();
+      // nez large
+      ell(g, HX + 9, HY + 3.2, 2.2, 1.9, '#7a94b0', 1.1);
+      // bouche et défenses
+      const open = P.air || P.castAng !== null || P.dash;
+      g.strokeStyle = OUT;
+      g.lineWidth = 1.3;
+      g.beginPath();
+      g.moveTo(HX - 1.6, HY + 7.2);
+      g.quadraticCurveTo(HX + 4, HY + 8.6 + (open ? 1.6 : 0), HX + 9, HY + 6.8);
+      g.stroke();
+      [[HX + 0.6, 0], [HX + 6.8, 0]].forEach(([tx0]) => {
+        g.beginPath();
+        g.moveTo(tx0 - 1.3, HY + 7.6);
+        g.lineTo(tx0 + 0.2, HY + 3.4);
+        g.lineTo(tx0 + 1.5, HY + 7.4);
+        g.closePath();
+        paint(g, '#f8f4e6', 1);
+      });
+      // touffe de cheveux roux sur le crâne
+      g.beginPath();
+      g.moveTo(HX - 1.6, HY - 8.8);
+      g.quadraticCurveTo(HX + 0.4, HY - 12.6 + Math.sin(P.t * 0.1) * 0.5, HX + 2.2, HY - 8.8);
+      g.quadraticCurveTo(HX + 3.6, HY - 12, HX + 5.2, HY - 8.2);
+      g.closePath();
+      paint(g, '#c4552a', 1.1);
+    },
+  };
+
   /* ---------- Assemblage du bonhomme ---------- */
   const HEADROOM = {
-    tasse: 19, cookie: 12, magicien: 30, gilet: 19, pc: 11, spaetzle: 17, swift: 1, roulee: 22, archer: 19, bretzel: 12, toaster: 19, canard: 15,
+    tasse: 19, cookie: 12, magicien: 30, gilet: 19, pc: 11, spaetzle: 17, swift: 1, roulee: 22, archer: 19, bretzel: 12, toaster: 19, canard: 15, durif: 20, ogre: 25,
   };
 
   function drawLeg(g, L, S, C, color, shoe) {
@@ -1372,7 +1568,7 @@
 
   const NAMES = {
     tasse: 'Tasse', cookie: 'Cookie', magicien: 'Magicien', gilet: 'Gilet jaune', pc: 'PC', spaetzle: 'Spätzle', swift: 'Swift',
-    roulee: 'Roulée', archer: 'Archer', bretzel: 'Bretzel', toaster: 'Grille-pain', canard: 'Canard',
+    roulee: 'Roulée', archer: 'Archer', bretzel: 'Bretzel', toaster: 'Grille-pain', canard: 'Canard', durif: 'Sylvain Durif', ogre: 'Ogre',
   };
   const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4', '#f43f5e', '#94a3b8'];
 
