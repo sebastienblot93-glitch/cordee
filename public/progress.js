@@ -178,7 +178,7 @@
   function fetchCatalog() {
     fetch('/api/levels', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => { catalog = j; catalogOk = true; renderAll(); tryAskResume(); })
+      .then((j) => { j.levels = (j.levels || []).filter((l) => !l.tutorial); catalog = j; catalogOk = true; renderAll(); tryAskResume(); })
       .catch(() => { setTimeout(fetchCatalog, 4000); });
   }
 
@@ -439,6 +439,12 @@
     $('resume').classList.remove('show');
   };
 
+  function tutorialDone() {
+    if (data.tut) return;
+    data.tut = 1;
+    persist();
+  }
+
   /* ---------- Écran de fin de niveau ---------- */
   let resultTimer = null;
   let resultAt = 0;
@@ -449,6 +455,7 @@
   }
 
   function showResult(res, finished, isHost) {
+    if (res && res.tutorial) { tutorialDone(); hooks.toast('Tutoriel terminé ! Direction le niveau 1…'); return null; }
     const l = cur;
     const box = $('result');
     const sec = res.time / 60;
@@ -539,6 +546,12 @@
     fmt,
     // Début (ou redémarrage) d'un niveau
     onStart(msg) {
+      if (cur && cur.tutorial && !(msg.chapter && msg.chapter.tutorial)) tutorialDone(); // on quitte le tutoriel (terminé ou passé)
+      if (msg.chapter && msg.chapter.tutorial) { // le tutoriel ne compte ni pour les records, ni pour la reprise, ni pour les statistiques
+        cur = { index: msg.index, name: msg.name, tutorial: true, help: false };
+        hideResult();
+        return;
+      }
       cur = { index: msg.index, name: msg.name, diamond: msg.diamond, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false };
       if (msg.index > data.furthest) { setFurthest(msg.index); persist(); }
       hideResult();
@@ -546,10 +559,12 @@
     },
     // Temps de jeu (secondes) et chutes : enregistrés en local, envoyés avec la sauvegarde d'équipe au plus une fois par minute
     addPlay(sec) {
+      if (cur && cur.tutorial) return;
       today().s = Math.min(86400, today().s + sec);
       statsDirty = true;
     },
     onDeath(n) {
+      if (cur && cur.tutorial) return;
       const k = n || 1;
       today().d += k;
       if (cur) data.stats.fails[cur.name] = (data.stats.fails[cur.name] || 0) + k;
@@ -571,6 +586,7 @@
     goldAt: () => (cur ? cur.gold : 0),
     silverAt: () => (cur ? cur.silver : 0),
     onStar(name) {
+      if (cur && cur.tutorial) return false;
       const first = !data.stars[name];
       data.stars[name] = 1;
       persist();
@@ -581,6 +597,11 @@
     starTotal: starCount,
     onResult: showResult,
     hideResult,
+    // Tutoriel : proposé uniquement à la toute première partie d'un duo (aucun record, aucune étoile, jamais fait ni passé)
+    needsTutorial() {
+      return !data.tut && !Object.keys(data.best).length && !Object.keys(data.stars).length && data.furthest < 1 && firstSync;
+    },
+    tutorialDone,
     takeResume() { const r = pendingResume; pendingResume = null; return r; },
     peekResume: () => pendingResume,
   };

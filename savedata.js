@@ -9,7 +9,7 @@
   const MAX_LEVELS = 200;
   const MAX_NAME = 60;
 
-  const blank = () => ({ v: 1, best: {}, stars: {}, furthest: -1, fat: 0, stats: { days: {}, fails: {} } });
+  const blank = () => ({ v: 1, best: {}, stars: {}, furthest: -1, fat: 0, tut: 0, stats: { days: {}, fails: {} } });
   const MAX_DAYS = 500;
   const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
   const sorted = (o) => Object.keys(o).sort().reduce((r, k) => { r[k] = o[k]; return r; }, {});
@@ -47,6 +47,7 @@
     });
     out.furthest = int(o.furthest, -1, MAX_LEVELS, -1);
     out.fat = int(o.fat, 0, 8.64e15, 0);
+    out.tut = o.tut ? 1 : 0; // tutoriel terminé (ou passé) par ce duo
     // Statistiques : s = secondes jouées ce jour-là, d = chutes ; fails = chutes par niveau
     const st = o.stats && typeof o.stats === 'object' ? o.stats : {};
     const days = st.days && typeof st.days === 'object' ? st.days : {};
@@ -96,6 +97,7 @@
     };
     out.stats.days = mx(a.stats.days, b.stats.days, (p, q) => (p && q ? { s: Math.max(p.s, q.s), d: Math.max(p.d, q.d) } : Object.assign({}, p || q)));
     out.stats.fails = mx(a.stats.fails, b.stats.fails, (p, q) => Math.max(p || 0, q || 0));
+    out.tut = a.tut || b.tut ? 1 : 0;
     Object.keys(a.stars).forEach((n) => { out.stars[n] = 1; });
     Object.keys(b.stars).forEach((n) => { out.stars[n] = 1; });
     // « Niveau atteint » : c'est la modification la plus récente qui gagne (permet aussi de l'effacer)

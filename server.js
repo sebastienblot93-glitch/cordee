@@ -13,7 +13,7 @@ const MAX_PLAYERS = 8;
 const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#f97316', '#14b8a6', '#ec4899', '#84cc16', '#06b6d4', '#f43f5e', '#94a3b8'];
 const ROLES = ['mage', 'archer'];
 // Apparences proposées dans le salon (le dessin est fait par le navigateur)
-const SKINS = ['tasse', 'cookie', 'magicien', 'gilet', 'pc', 'spaetzle', 'swift', 'roulee', 'archer', 'bretzel', 'toaster', 'canard'];
+const SKINS = ['tasse', 'cookie', 'magicien', 'gilet', 'pc', 'spaetzle', 'swift', 'roulee', 'archer', 'bretzel', 'toaster', 'canard', 'durif', 'ogre'];
 const FOREVER = 1e12;
 
 const app = express();
@@ -46,8 +46,8 @@ app.get('/diag', async (req, res) => {
   const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
   const lines = [
     'Cordée - ' + BUILD,
-    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 34)',
-    'Chapitres : ' + CHAPTERS.length + ' (attendu : 9)',
+    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 35, dont le tutoriel)',
+    'Chapitres : ' + CHAPTERS.length + ' (attendu : 10)',
     'Sauvegarde des records : ' + (storeMode === 'upstash' ? 'en ligne (Upstash) - durable' : storeMode === 'file' ? 'fichier local - effacé à chaque redémarrage sur Render' : 'mémoire - perdue au redémarrage') + ' (savedata.js : ' + size(path.join(__dirname, 'savedata.js')) + ')',
     ...(storeMode === 'upstash' ? await upstashDiag() : []),
     '',
@@ -66,7 +66,7 @@ app.get('/api/levels', (req, res) => {
   res.json({
     levels: LEVELS.map((l) => ({
       name: l.name, chapter: l.chapter, timer: l.timer || 0, diamond: l.diamond, gold: l.gold, silver: l.silver,
-      star: l.rows.some((r) => r.includes('*')),
+      star: l.rows.some((r) => r.includes('*')), tutorial: !!l.tutorial,
     })),
     chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
   });
@@ -277,6 +277,61 @@ const rooms = new Map(); // code -> room
 if (process.env.CORDEE_TEST) global.__rooms = rooms; // uniquement pour les tests automatiques
 if (process.env.CORDEE_TEST) global.__tick = (room) => tick(room); // idem : permet d'avancer la simulation pas à pas
 
+/* ---------- Tutoriel : le carnet des touches ---------- */
+// Chaque étape est validée par le serveur lui-même quand l'action a vraiment eu lieu (sauf H, qui n'existe que dans le navigateur).
+const TUT_STEPS = [
+  { id: 'move', label: 'Se déplacer', key: '← → (ou Q D)' },
+  { id: 'jump', label: 'Sauter', key: 'Espace' },
+  { id: 'dash', label: 'Dash', key: 'Maj' },
+  { id: 'orb', label: 'Orbe (Mage)', key: 'clic gauche' },
+  { id: 'ice', label: 'Glace (Mage)', key: 'clic droit sur une rune' },
+  { id: 'swap', label: 'Échange de places (Mage)', key: 'bouton Échange, puis clic' },
+  { id: 'arrow', label: 'Flèche (Archer)', key: 'clic gauche' },
+  { id: 'fire', label: 'Feu (Archer)', key: 'bouton Feu (ou clic droit), puis clic' },
+  { id: 'dbl', label: 'Double saut (Archer)', key: 'Espace en l’air' },
+  { id: 'grab', label: 'Porter son coéquipier', key: 'F', needs2: true },
+  { id: 'throw', label: 'Le lancer', key: 'F encore', needs2: true },
+  { id: 'role', label: 'Échanger les rôles', key: 'T' },
+  { id: 'emote', label: 'Emote', key: 'G, M ou J' },
+  { id: 'mark', label: '« Regarde ici »', key: 'Ctrl + clic droit' },
+  { id: 'hint', label: 'Indice', key: 'I' },
+  { id: 'help', label: 'Aide', key: 'H' },
+];
+const TUT_IDS = new Set(TUT_STEPS.map((x) => x.id));
+function tutNeed(room) {
+  const solo = room.players.size < 2;
+  return TUT_STEPS.filter((x) => !(x.needs2 && solo)).map((x) => x.id);
+}
+function tutMsg(room) {
+  const p = {};
+  for (const [id, set] of room.tut) p[id] = [...set].filter((k) => TUT_IDS.has(k));
+  return { t: 'tut', need: tutNeed(room), p };
+}
+function tutStep(room, p, id) {
+  if (!room || !room.level || !room.level.cfg.tutorial || room.status !== 'playing') return;
+  let set = room.tut.get(p.id);
+  if (!set) { set = new Set(); room.tut.set(p.id, set); }
+  if (set.has(id)) return;
+  set.add(id);
+  if (id === '_l' || id === '_r') { // se déplacer = aller à gauche ET à droite
+    if (set.has('_l') && set.has('_r')) tutStep(room, p, 'move');
+    return;
+  }
+  broadcast(room, tutMsg(room));
+}
+function tutComplete(room) {
+  if (room.tutOk) return true;
+  const need = tutNeed(room);
+  const list = [...room.players.values()];
+  if (!list.length) return false;
+  const ok = list.every((p) => { const s = room.tut.get(p.id); return s && need.every((k) => s.has(k)); });
+  if (ok) room.tutOk = true;
+  return ok;
+}
+const TUT_INDEX = LEVELS.findIndex((l) => l.tutorial);
+const REAL_COUNT = TUT_INDEX >= 0 ? LEVELS.length - 1 : LEVELS.length; // niveaux « du parcours » (le tutoriel est à part)
+const nextIndex = (i) => (LEVELS[i].tutorial ? 0 : i + 1);
+
 /* ---------- Monde : volets, plaques, cristaux, cibles, portes ---------- */
 function holdFor(L, group) {
   const h = L.cfg.hold && L.cfg.hold[group];
@@ -350,6 +405,7 @@ function updateWorld(room, list) {
     if (cond || (room.latch[g] || 0) > t) open.add(g);
   }
   if (cfg.sequence && room.seq.done) open.add(cfg.sequence.group);
+  if (cfg.tutorial && tutComplete(room)) open.add(cfg.tutorial.group);
   // Une porte reste ouverte tant qu'un joueur la traverse
   for (const p of list) for (const g of gatesTouching(L, p)) open.add(g);
   L.open = open;
@@ -862,7 +918,7 @@ function chapterInfo(index) {
   const count = LEVELS.filter((l) => l.chapter === def.chapter).length;
   return {
     index: def.chapter, name: ch.name, theme: ch.theme, blurb: ch.blurb, powers: ch.powers || [],
-    pos: index - first + 1, count, first: index === first,
+    pos: index - first + 1, count, first: index === first, tutorial: !!def.tutorial,
   };
 }
 
@@ -873,7 +929,7 @@ function startMsg(room) {
     level: def.rows,
     tile: TILE,
     index: room.levelIndex,
-    total: LEVELS.length,
+    total: REAL_COUNT,
     name: def.name,
     hint: def.hint,
     timer: def.timer || 0, // secondes (0 = pas de minuteur)
@@ -894,6 +950,8 @@ function startMsg(room) {
       carry: !!def.carry,
       heavy: def.heavy || [],
       boss: def.boss ? { hp: def.boss.hp, hearts: def.boss.hearts, name: def.boss.name } : null,
+      tips: def.tips || [],
+      tutorial: def.tutorial ? { steps: TUT_STEPS } : null,
     },
   };
 }
@@ -916,6 +974,8 @@ function freshRoomState(room, index) {
   room.helped = false; // un des joueurs a consulté l'indice ou l'aide pendant ce niveau
   room.result = null;
   room.latch = {};
+  room.tut = new Map(); // carnet du tutoriel : joueur -> étapes réussies
+  room.tutOk = false;
   room.crystalUntil = room.level.crystals.map(() => 0);
   room.targetUntil = room.level.targets.map(() => 0);
   room.torchUntil = room.level.torches.map(() => 0);
@@ -945,13 +1005,20 @@ function loadLevel(room, index) {
   resetPlayers(room);
   broadcast(room, lobbyMsg(room));
   broadcast(room, startMsg(room));
+  if (LEVELS[index].tutorial) broadcast(room, tutMsg(room));
 }
 
 function finishLevel(room, skipped) {
   // résultat du niveau : le temps compte depuis le début (hors pauses), les chutes depuis le dernier redémarrage
   room.result = { time: room.clock + (room.boss ? room.carryClock || 0 : 0), deaths: room.deaths, star: room.starTaken, skipped: !!skipped, help: !!room.helped };
+  if (LEVELS[room.levelIndex].tutorial) { // pas d'écran de résultat : un court message, puis le niveau 1
+    room.result.tutorial = true;
+    room.timer = 240;
+    room.status = 'won';
+    return;
+  }
   room.timer = 900; // écran de résultat : 15 secondes (le chef peut passer plus vite)
-  room.status = room.levelIndex >= LEVELS.length - 1 ? 'finished' : 'won';
+  room.status = room.levelIndex >= REAL_COUNT - 1 ? 'finished' : 'won';
 }
 
 function backToLobby(room) {
@@ -1029,7 +1096,9 @@ function tick(room) {
     unstick(L, p);
     p.input.jumpEdge = p.jumpPending;
     p.input.dash = p.dashPending && !p.carrying; // pas de dash en portant quelqu'un
+    const hadAirJump = p.airJump;
     stepPlayer(L, p);
+    if (L.cfg.tutorial && p.kit === 'archer' && hadAirJump && !p.airJump && !p.onGround && p.input.jumpEdge) tutStep(room, p, 'dbl');
     p.jumpPending = false;
     p.dashPending = false;
     p.input.jumpEdge = false;
@@ -1073,7 +1142,7 @@ function tick(room) {
   } else if (room.status === 'timeup' || room.status === 'bossdown') {
     if (--room.timer <= 0) return loadLevel(room, room.levelIndex);
   } else if (room.status === 'won') {
-    if (--room.timer <= 0) return loadLevel(room, room.levelIndex + 1);
+    if (--room.timer <= 0) return loadLevel(room, nextIndex(room.levelIndex));
   } else if (room.status === 'finished') {
     if (--room.timer <= 0) return backToLobby(room);
   }
@@ -1128,7 +1197,7 @@ function lobbyMsg(room) {
     code: room.code,
     hostId: room.hostId,
     status: room.status,
-    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities, chapter: l.chapter })),
+    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities, chapter: l.chapter, tutorial: !!l.tutorial })),
     chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
     players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role, skin: p.skin })),
   };
@@ -1238,6 +1307,7 @@ wss.on('connection', (ws) => {
         me.roleLockUntil = now + 1500;
         applyRole(room, me);
         broadcast(room, lobbyMsg(room));
+        tutStep(room, me, 'role');
         break;
       }
       case 'emote': {
@@ -1249,6 +1319,7 @@ wss.on('connection', (ws) => {
         if (now < (me.emoteUntil || 0)) return;
         me.emoteUntil = now + 600;
         broadcast(room, { t: 'emote', id: ws.id, e: n });
+        tutStep(room, me, 'emote');
         break;
       }
       case 'mark': {
@@ -1260,6 +1331,7 @@ wss.on('connection', (ws) => {
         const now = Date.now();
         if (now < (me.markUntil || 0)) return;
         me.markUntil = now + 1200;
+        tutStep(room, me, 'mark');
         const L = room.level;
         broadcast(room, {
           t: 'mark', id: ws.id,
@@ -1271,7 +1343,9 @@ wss.on('connection', (ws) => {
       case 'start': {
         if (!room || room.hostId !== ws.id || room.status !== 'lobby') return;
         const index = Math.min(Math.max(parseInt(msg.level, 10) || 0, 0), LEVELS.length - 1);
-        if (LEVELS[index].abilities && !hasBothRoles(room)) {
+        if (LEVELS[index].tutorial) {
+          if (room.players.size < 2) return send(ws, { t: 'error', msg: 'Le tutoriel se joue à deux : l\u2019autre joueur doit d\u2019abord rejoindre la room avec le code ' + room.code + '.' });
+        } else if (LEVELS[index].abilities && !hasBothRoles(room)) {
           const msgErr = room.players.size < 2
             ? `Vous êtes seul dans cette room (${room.code}). L'autre joueur doit cliquer sur « Rejoindre » et saisir ce code, sans créer sa propre room.`
             : 'Ce niveau demande un Mage et un Archer. L\u2019un de vous deux doit changer de rôle dans le salon.';
@@ -1287,15 +1361,18 @@ wss.on('connection', (ws) => {
           if (room.hostId !== ws.id) return;
         } else if (room.status !== 'playing') return;
         room.bossResume = 0;
+        const keepTut = LEVELS[room.levelIndex].tutorial ? { tut: room.tut, ok: room.tutOk } : null;
         loadLevel(room, room.levelIndex);
+        if (keepTut) { room.tut = keepTut.tut; room.tutOk = keepTut.ok; broadcast(room, tutMsg(room)); }
         break;
       }
       case 'skip': {
         if (!room || room.hostId !== ws.id) return;
-        if (room.status === 'won') loadLevel(room, room.levelIndex + 1); // le chef passe l'écran de résultat
+        if (room.status === 'won') loadLevel(room, nextIndex(room.levelIndex)); // le chef passe l'écran de résultat
         else if (room.status === 'finished') backToLobby(room);
         else if (room.status !== 'playing') return;
-        else if (room.levelIndex >= LEVELS.length - 1) finishLevel(room, true);
+        else if (LEVELS[room.levelIndex].tutorial) loadLevel(room, 0); // « Passer le tutoriel »
+        else if (room.levelIndex >= REAL_COUNT - 1) finishLevel(room, true);
         else loadLevel(room, room.levelIndex + 1);
         break;
       }
@@ -1305,8 +1382,11 @@ wss.on('connection', (ws) => {
         p.input.left = !!msg.left;
         p.input.right = !!msg.right;
         p.input.jump = !!msg.jump;
+        if (p.input.left) tutStep(room, p, '_l');
+        if (p.input.right) tutStep(room, p, '_r');
         if (msg.jp !== undefined && msg.jp !== p.jpSeen) {
           p.jpSeen = msg.jp;
+          tutStep(room, p, 'jump');
           p.jumpPending = true; // nouvelle pression de la touche saut (double saut)
           p.jumpAt = room.time; // pour les ponts synchro
         }
@@ -1325,6 +1405,13 @@ wss.on('connection', (ws) => {
       case 'help': {
         // un joueur a regardé l'indice : « sans indice » vaut pour tout le duo
         if (room && room.status === 'playing') room.helped = true;
+        { const q = room && room.players.get(ws.id); if (q) tutStep(room, q, 'hint'); }
+        break;
+      }
+      case 'tut': {
+        // étapes qui n'existent que dans le navigateur (l'aide, touche H)
+        const q = room && room.players.get(ws.id);
+        if (q && msg.step === 'help') tutStep(room, q, 'help');
         break;
       }
       case 'ping': {
@@ -1333,17 +1420,28 @@ wss.on('connection', (ws) => {
       }
       case 'dash': {
         const p = room && room.players.get(ws.id);
-        if (p) p.dashPending = true;
+        if (p) { p.dashPending = true; tutStep(room, p, 'dash'); }
         break;
       }
       case 'grab': {
         const p = room && room.players.get(ws.id);
-        if (p) grab(room, p);
+        if (p) {
+          const was = p.carrying;
+          grab(room, p);
+          if (!was && p.carrying) tutStep(room, p, 'grab');
+          else if (was && !p.carrying) tutStep(room, p, 'throw');
+        }
         break;
       }
       case 'cast': {
         const p = room && room.players.get(ws.id);
-        if (p) cast(room, p, msg.slot, Number(msg.x), Number(msg.y));
+        if (p) {
+          const before = [...p.cd];
+          cast(room, p, msg.slot, Number(msg.x), Number(msg.y));
+          if (p.cd[0] !== before[0]) tutStep(room, p, p.kit === 'mage' ? 'orb' : 'arrow');
+          if (p.cd[1] !== before[1]) tutStep(room, p, p.kit === 'mage' ? 'ice' : 'fire');
+          if (p.cd[2] !== before[2]) tutStep(room, p, 'swap');
+        }
         break;
       }
     }

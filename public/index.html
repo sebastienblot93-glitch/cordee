@@ -92,6 +92,31 @@
     #banner.show { display: grid; }
     #banner.bad { color: var(--danger); background: rgba(40, 8, 12, .72); }
     .hint { color: var(--muted); font-size: .9rem; margin-top: .6rem; text-align: center; }
+    /* Tutoriel : carnet des touches, visite de l'interface (bulles) */
+    #tut-book { display: none; margin: .5rem auto 0; max-width: 940px; padding: .55rem .7rem; border: 2px solid var(--accent); border-radius: 8px; background: rgba(13, 13, 38, .78); text-align: left; }
+    #tut-book.on { display: block; }
+    #tut-book .tb-head { display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; justify-content: space-between; font-size: .85rem; color: var(--muted); margin-bottom: .4rem; }
+    #tut-book .tb-head b { color: var(--accent); font-weight: 700; }
+    #tut-book .tb-head span.tb-btns { display: flex; gap: .4rem; align-items: center; }
+    #tut-book button { padding: .25rem .6rem; font-size: .78rem; }
+    #tut-list { display: flex; flex-wrap: wrap; gap: .3rem .4rem; margin: 0; padding: 0; list-style: none; }
+    #tut-list li { font-size: .74rem; line-height: 1.2; padding: .22rem .5rem; border-radius: 999px; border: 1px solid #4a4a8a; background: rgba(30, 30, 80, .6); color: var(--chalk); white-space: nowrap; }
+    #tut-list li i { font-style: normal; display: inline-block; width: 1.1em; color: #6c6c9c; }
+    #tut-list li em { font-style: normal; color: var(--muted); margin-left: .35em; }
+    #tut-list li.done { border-color: #6fcf6f; background: rgba(40, 90, 50, .55); }
+    #tut-list li.done i { color: #9be564; }
+    #tut-list li.mate { box-shadow: inset 0 -3px 0 -1px #6fcf6f; }
+    #coach { position: fixed; inset: 0; z-index: 60; display: none; pointer-events: none; }
+    #coach.on { display: block; }
+    #coach-hl { position: fixed; border: 3px solid var(--accent, #ffd24a); border-radius: 8px; box-shadow: 0 0 0 4000px rgba(5, 4, 20, .45), 0 0 18px 2px var(--accent, #ffd24a); transition: all .25s ease; pointer-events: none; }
+    #coach-bubble { position: fixed; width: min(320px, 90vw); padding: .75rem .9rem; border-radius: 12px; background: #fff7e2; color: #1d1a3b; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); font-size: .92rem; line-height: 1.35; pointer-events: auto; }
+    #coach-bubble p { margin: 0 0 .6rem; }
+    #coach-bubble .cb-step { font-size: .72rem; color: #6a6396; margin-bottom: .25rem; }
+    #coach-bubble .cb-actions { display: flex; gap: .5rem; justify-content: flex-end; }
+    #coach-bubble button { padding: .3rem .8rem; font-size: .8rem; }
+    #coach-bubble button.ghost { color: #1d1a3b; border-color: #1d1a3b; background: transparent; }
+    #tut-note { display: none; margin: .5rem 0 0; font-size: .85rem; color: var(--accent); text-align: center; }
+
     select {
       width: 100%; padding: .7rem .8rem; font: inherit; color: var(--chalk);
       background: var(--night); border: 2px solid #4a4a8a; border-radius: 4px;
@@ -380,7 +405,7 @@
         <p id="team-status" class="team-status">Tapez le même code sur chaque ordinateur : records, étoiles et niveau atteint se retrouvent à chaque session.</p>
       </div>
       <p id="menu-error" class="error" role="alert"></p>
-      <p style="text-align:center;opacity:.45;font-size:12px;margin-top:8px">Cordée v3 · 34 niveaux · 12 skins</p>
+      <p style="text-align:center;opacity:.45;font-size:12px;margin-top:8px">Cordée v3 · 34 niveaux · 14 skins</p>
     </section>
 
     <section id="screen-lobby" class="screen">
@@ -406,6 +431,7 @@
         <label for="level-select">Niveau de départ</label>
         <select id="level-select"></select>
       </div>
+      <p id="tut-note">Première partie de l’équipe : le tutoriel se lance d’abord (vous pourrez le passer).</p>
       <button id="btn-start" class="full">Lancer la partie</button>
       <p id="lobby-wait" class="tag" style="display:none">En attente du chef de room…</p>
       <p id="lobby-error" class="error" role="alert"></p>
@@ -451,6 +477,7 @@
     </div>
     <div id="under">
       <div id="under-main">
+        <div id="tut-book"></div>
         <p id="level-hint" class="hint"></p>
         <div id="actionbar"></div>
         <div id="teambar"></div>
@@ -472,6 +499,8 @@
     <button id="btn-ghost" class="ghost mute-btn" type="button" title="Fantôme de votre meilleure partie">👻</button>
     <button id="btn-mute" class="ghost mute-btn" type="button">Son</button>
   </div>
+
+  <div id="coach" aria-live="polite"><div id="coach-hl"></div><div id="coach-bubble"><div class="cb-step"></div><p></p><div class="cb-actions"><button id="coach-skip" class="ghost" type="button">Passer la visite</button><button id="coach-next" type="button">Suivant ›</button></div></div></div>
 
   <div id="help" role="dialog" aria-label="Aide">
     <div class="card">

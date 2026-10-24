@@ -575,6 +575,38 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, swap: true, and: [1], hold: { 1: 210 }, boss: { cx: 480, cy: 160, hp: 60, hearts: 6, name: 'Le Gardien' } }),
 
+  /* ===== Tutoriel : toutes les touches, avec des bulles explicatives (hors parcours : il est proposé à la toute première partie) ===== */
+  make('Tutoriel', 'Essayez chacune des touches du carnet (en haut à gauche) : quand vous les avez toutes utilisées, tous les deux, la grille du fond s’ouvre.', ({ rect, put }) => {
+    rect(4, 12, 1, 2); // muret : on apprend à sauter
+    put(6, 13, 'C');
+    rect(7, 14, 6, 1, '^'); // fosse trop large pour un simple saut : le dash
+    put(13, 13, 'C');
+    put(15, 9, 'x'); // cristal du Mage
+    put(17, 9, 'o'); // cible de l'Archer
+    rect(19, 1, 1, 13, 'a'); // grille : cristal ET cible ensemble
+    put(21, 9, 'g'); // torche de l'Archer
+    rect(23, 1, 1, 13, 'b'); // grille de la torche
+    put(24, 13, 'r'); // rune du Mage
+    rect(24, 10, 2, 1); // corniche : double saut de l'Archer
+    rect(26, 1, 1, 13, 'c'); // grille finale : s'ouvre quand le carnet est complet pour les deux joueurs
+    put(27, 13, 'K');
+    put(28, 13, 'D');
+    put(2, 13, 'S');
+  }, {
+    abilities: true, fire: true, swap: true, carry: true, and: [1], hold: { 1: 0, 2: 0 },
+    tutorial: { group: 3 },
+    tips: [
+      { tx: 1, ty: 9, w: 150, text: 'Bienvenue ! ← → (ou Q D) pour bouger, Espace pour sauter. Passe le muret.' },
+      { tx: 1, ty: 5, w: 150, text: 'Sous le jeu : tes sorts (selon ton rôle). En haut : le chrono, les clés et ton ping.' },
+      { tx: 7, ty: 8, w: 150, text: 'Trop large pour sauter ! Cours, saute puis appuie sur Maj : dash en plein vol.' },
+      { tx: 7, ty: 4, w: 150, text: 'F : porte ton coéquipier (collés l’un à l’autre), F encore : tu le lances.' },
+      { tx: 13, ty: 5, w: 160, text: 'Le Mage touche le cristal, l’Archer la cible : EN MÊME TEMPS (clic gauche, après avoir visé).' },
+      { tx: 20, ty: 6, w: 150, text: 'Archer : bouton Feu (ou clic droit), puis clic sur la torche pour l’allumer.' },
+      { tx: 24, ty: 3, w: 160, text: 'Mage : clic droit sur la rune = glace. Archer : double saut (Espace deux fois) sur la corniche.' },
+      { tx: 27, ty: 7, w: 160, text: 'T échange vos rôles : essayez les pouvoirs des deux ! Les touches H, I, G/M/J et Ctrl + clic droit comptent aussi.' },
+    ],
+  }),
+
 ];
 
 // Chapitres : thème graphique, texte d'introduction et nombre de niveaux (dans l'ordre de LEVELS)
@@ -588,6 +620,7 @@ const CHAPTERS = [
   { name: 'Les Brumes', theme: 'mist', count: 4, blurb: 'Le brouillard efface les distances. Il faudra échanger vos places.', powers: ['Mage : bouton Échange, puis clic sur l’autre joueur (vous échangez vos places)'] },
   { name: 'Le Sommet', theme: 'summit', count: 6, blurb: 'Le dernier chapitre : six épreuves très difficiles, chronos serrés. Les trois premières sont dures, les trois dernières extrêmes. Parlez-vous, répartissez-vous, et ne lâchez rien.', powers: ['Plaque lourde : il faut être deux dessus pour l’enfoncer', 'Tout ce que vous avez appris, d’affilée'] },
   { name: 'La Citadelle', theme: 'citadel', count: 4, blurb: 'Le dernier rempart. Un gardien veille, et il ne se laissera pas faire.', powers: ['Bouclier du boss : cristal du Mage ET cible de l’Archer en même temps', 'Barre de vie du boss en haut, cœurs de l’équipe en dessous'] },
+  { name: 'Tutoriel', theme: 'prairie', count: 1, tutorial: true, blurb: 'Avant de partir à l’ascension : apprenez toutes les touches, à deux. Vous pouvez aussi passer le tutoriel.', powers: ['Le carnet en haut à gauche coche chaque touche essayée', 'Le chef de room peut passer le tutoriel'] },
 ];
 
 let _c = 0;
@@ -608,7 +641,7 @@ const TIMERS = {
   'Premier feu': 70, 'Les quatre feux': 75, 'Le passeur': 90, 'Brasier': 85, // chapitre 6 : la Forge
   'Échange': 70, 'Le pilier': 75, 'Brouillard': 90, 'Cordée': 110, // chapitre 7 : les Brumes
   'Camp de base': 70, 'Métronome': 75, 'Tempête': 80, 'Cheminée': 100, 'Pointe de givre': 100, 'Le Sommet': 110, // chapitre 8 : le Sommet
-  'Les Douves': 80, 'Les Oubliettes': 85, 'Le Donjon': 100, 'Le Gardien': 240, // chapitre 9 : la Citadelle
+  'Tutoriel': 0, 'Les Douves': 80, 'Les Oubliettes': 85, 'Le Donjon': 100, 'Le Gardien': 240, // chapitre 9 : la Citadelle
 };
 LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 
