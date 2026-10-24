@@ -95,10 +95,13 @@
     .look-wrap { display: flex; gap: 1rem; align-items: flex-start; }
     #look-preview { flex: none; width: 108px; height: 126px; background: var(--night); border-radius: 6px; }
     .look-pick { flex: 1; min-width: 0; }
-    .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: .4rem; }
+    .skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: .4rem; }
     button.skin-btn { padding: 2px; background: var(--night); border: 2px solid #3a3a7a; line-height: 0; }
     button.skin-btn.on { border-color: var(--sun); background: #2c2c6e; }
     button.skin-btn canvas { width: 100%; height: auto; }
+    button.skin-btn { display: flex; flex-direction: column; align-items: center; }
+    .skin-name { display: block; width: calc(100% + 4px); margin: 0 -2px; font-size: .5rem; line-height: 1.2; padding: 1px 0 3px; color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0; text-transform: none; font-weight: 600; }
+    button.skin-btn.on .skin-name { color: var(--sun); }
     .color-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .7rem; }
     button.swatch { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 3px solid transparent; }
     button.swatch.on { border-color: #fff; box-shadow: 0 0 0 2px var(--night); }
