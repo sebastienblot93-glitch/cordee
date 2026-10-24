@@ -7,11 +7,12 @@
   const $ = (id) => document.getElementById(id);
   const KEY = 'cordee.save.v1';
   const MEDALS = {
+    diamond: { name: 'Diamant', emoji: '💎', rank: 4 },
     gold: { name: 'Or', emoji: '🥇', rank: 3 },
     silver: { name: 'Argent', emoji: '🥈', rank: 2 },
     bronze: { name: 'Bronze', emoji: '🥉', rank: 1 },
   };
-  const RANK_MEDAL = [null, 'bronze', 'silver', 'gold'];
+  const RANK_MEDAL = [null, 'bronze', 'silver', 'gold', 'diamond'];
   // Titres débloqués avec les étoiles
   const TITLES = [[0, 'Promeneur'], [3, 'Randonneur'], [8, 'Éclaireur'], [14, 'Grimpeur'], [20, 'Alpiniste'], [26, 'Maître de cordée'], [30, 'Étoile du Sommet']];
 
@@ -189,8 +190,8 @@
     const s = sec - m * 60;
     return `${m}:${(dec ? s.toFixed(1) : String(Math.floor(s))).padStart(dec ? 4 : 2, '0')}`;
   }
-  function medalFor(sec, gold, silver) {
-    return sec <= gold ? 'gold' : sec <= silver ? 'silver' : 'bronze';
+  function medalFor(sec, gold, silver, diamond) {
+    return diamond && sec <= diamond ? 'diamond' : sec <= gold ? 'gold' : sec <= silver ? 'silver' : 'bronze';
   }
   function titleFor(n) {
     let t = TITLES[0][1];
@@ -211,11 +212,11 @@
     const lv = catalog.levels;
     if (!lv.length) { root.append(el('p', 'side-empty', 'Chargement…')); return; }
     const done = lv.filter((l) => data.best[l.name] && data.best[l.name].t != null);
-    const cnt = { 3: 0, 2: 0, 1: 0 };
+    const cnt = { 4: 0, 3: 0, 2: 0, 1: 0 };
     done.forEach((l) => { cnt[data.best[l.name].m || 1]++; });
     const total = done.reduce((s, l) => s + data.best[l.name].t, 0);
     const head = el('div', 'side-sum');
-    head.append(el('div', 'sum-medals', `🥇 ${cnt[3]}   🥈 ${cnt[2]}   🥉 ${cnt[1]}`));
+    head.append(el('div', 'sum-medals', `💎 ${cnt[4]}  🥇 ${cnt[3]}  🥈 ${cnt[2]}  🥉 ${cnt[1]}`));
     head.append(el('div', 'sum-line', `${done.length}/${lv.length} niveaux terminés${done.length ? ` · temps cumulé ${fmt(total, true)}` : ''}`));
     root.append(head);
     root.append(el('div', 'sync-line'));
@@ -230,7 +231,7 @@
       }
       const b = data.best[l.name];
       const row = el('div', `rec-row${cur && cur.name === l.name ? ' cur' : ''}${b ? ' done' : ''}`);
-      row.title = `${l.name}\n🥇 ≤ ${fmt(l.gold)} · 🥈 ≤ ${fmt(l.silver)} · chrono ${fmt(l.timer)}`;
+      row.title = `${l.name}\n💎 ≤ ${fmt(l.diamond)} · 🥇 ≤ ${fmt(l.gold)} · 🥈 ≤ ${fmt(l.silver)} · chrono ${fmt(l.timer)}`;
       row.append(el('span', 'rec-medal', b ? MEDALS[RANK_MEDAL[b.m || 1]].emoji : '·'));
       row.append(el('span', 'rec-name', `${i + 1}. ${l.name}`));
       row.append(el('span', 'rec-time', b && b.t != null ? fmt(b.t, true) : `🥇 ${fmt(l.gold)}`));
@@ -245,7 +246,65 @@
     });
     const leg = el('p', 'side-legend', '❤ sans chute · 🧠 sans indice · l’or se joue au temps affiché');
     root.append(leg);
+    renderStats(root);
     root.append(saveButtons());
+  }
+
+  /* ---------- Statistiques du duo (discret : replié par défaut) ---------- */
+  const pad = (n) => String(n).padStart(2, '0');
+  const dayKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  let statsDirty = false;
+  let statsOpen = false;
+  function today() {
+    const k = dayKey(new Date());
+    return data.stats.days[k] || (data.stats.days[k] = { s: 0, d: 0 });
+  }
+  // Jours consécutifs jouées (au moins une minute), série en cours et meilleure série
+  function streaks() {
+    const ok = (k) => data.stats.days[k] && data.stats.days[k].s >= 60;
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    if (!ok(dayKey(d))) d.setDate(d.getDate() - 1); // pas encore joué aujourd'hui : la série d'hier compte toujours
+    let cur = 0;
+    while (ok(dayKey(d))) { cur++; d.setDate(d.getDate() - 1); }
+    let best = 0;
+    let run = 0;
+    let prev = null;
+    Object.keys(data.stats.days).filter(ok).forEach((k) => {
+      const t = new Date(`${k}T12:00:00`).getTime();
+      run = prev !== null && Math.round((t - prev) / 864e5) === 1 ? run + 1 : 1;
+      prev = t;
+      if (run > best) best = run;
+    });
+    return { cur, best: Math.max(best, cur) };
+  }
+  function fmtDuration(sec) {
+    const m = Math.round(sec / 60);
+    return m >= 60 ? `${Math.floor(m / 60)} h ${pad(m % 60)} min` : `${m} min`;
+  }
+  function renderStats(root) {
+    const days = Object.values(data.stats.days);
+    const secs = days.reduce((s, d) => s + d.s, 0);
+    const deaths = days.reduce((s, d) => s + d.d, 0);
+    const st = streaks();
+    const fails = Object.entries(data.stats.fails).sort((a, b) => b[1] - a[1])[0];
+    const box = document.createElement('details');
+    box.className = 'side-stats';
+    box.open = statsOpen;
+    box.addEventListener('toggle', () => { statsOpen = box.open; });
+    box.append(el('summary', '', '📊 Statistiques du duo'));
+    const rows = [
+      ['⏱ Temps de jeu', secs ? fmtDuration(secs) : '—'],
+      ['💥 Chutes', String(deaths)],
+      ['🔥 Série', st.cur ? `${st.cur} jour${st.cur > 1 ? 's' : ''}${st.best > st.cur ? ` (record ${st.best})` : ''}` : (st.best ? `0 (record ${st.best})` : '—')],
+      ['😖 Le plus raté', fails && fails[1] ? `${fails[0]} (${fails[1]})` : '—'],
+    ];
+    rows.forEach(([k, v]) => {
+      const r = el('div', 'stat-row');
+      r.append(el('span', 'stat-k', k), el('span', 'stat-v', v));
+      box.append(r);
+    });
+    root.append(box);
   }
 
   /* ---------- Panneau des étoiles ---------- */
@@ -397,7 +456,7 @@
     let medal = null;
     let info = null;
     if (!skipped && l) {
-      medal = medalFor(sec, l.gold, l.silver);
+      medal = medalFor(sec, l.gold, l.silver, l.diamond);
       const noDeath = res.deaths === 0;
       const noHelp = !l.help && !res.help; // l'indice consulté par l'un des joueurs compte pour tout le duo
       const b = data.best[l.name];
@@ -408,7 +467,7 @@
       nb.m = Math.max(nb.m, MEDALS[medal].rank);
       nb.nd = nb.nd || noDeath;
       nb.nh = nb.nh || noHelp;
-      nb.p = nb.p || (medal === 'gold' && noDeath && noHelp);
+      nb.p = nb.p || ((medal === 'gold' || medal === 'diamond') && noDeath && noHelp);
       nb.n++;
       data.best[l.name] = nb;
       persist();
@@ -436,7 +495,8 @@
     if (info && l) {
       if (medal === 'bronze') goal.textContent = `Argent à ≤ ${fmt(l.silver)} · or à ≤ ${fmt(l.gold)}`;
       else if (medal === 'silver') goal.textContent = `Il vous manquait ${r1(sec - l.gold)} s pour l’or (≤ ${fmt(l.gold)})`;
-      else goal.textContent = 'Temps d’or !';
+      else if (medal === 'gold') goal.textContent = `Diamant à ≤ ${fmt(l.diamond, true)} : ${r1(sec - l.diamond)} s à gagner`;
+      else goal.textContent = 'Coordination parfaite : diamant !';
     } else goal.textContent = '';
     const badges = $('res-badges');
     badges.innerHTML = '';
@@ -448,9 +508,9 @@
     }
     $('res-total').textContent = '';
     if (finished) {
-      const cnt = { 3: 0, 2: 0, 1: 0 };
+      const cnt = { 4: 0, 3: 0, 2: 0, 1: 0 };
       catalog.levels.forEach((x) => { const b = data.best[x.name]; if (b) cnt[b.m || 1]++; });
-      $('res-total').textContent = `Médailles : 🥇 ${cnt[3]}  🥈 ${cnt[2]}  🥉 ${cnt[1]} · Étoiles : ★ ${starCount()}/${catalog.levels.length} (${titleFor(starCount())})`;
+      $('res-total').textContent = `Médailles : 💎 ${cnt[4]}  🥇 ${cnt[3]}  🥈 ${cnt[2]}  🥉 ${cnt[1]} · Étoiles : ★ ${starCount()}/${catalog.levels.length} (${titleFor(starCount())})`;
     }
     $('res-replay').style.display = isHost ? '' : 'none';
     $('res-next').style.display = isHost ? '' : 'none';
@@ -479,11 +539,24 @@
     fmt,
     // Début (ou redémarrage) d'un niveau
     onStart(msg) {
-      cur = { index: msg.index, name: msg.name, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false };
+      cur = { index: msg.index, name: msg.name, diamond: msg.diamond, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false };
       if (msg.index > data.furthest) { setFurthest(msg.index); persist(); }
       hideResult();
       renderAll();
     },
+    // Temps de jeu (secondes) et chutes : enregistrés en local, envoyés avec la sauvegarde d'équipe au plus une fois par minute
+    addPlay(sec) {
+      today().s = Math.min(86400, today().s + sec);
+      statsDirty = true;
+    },
+    onDeath(n) {
+      const k = n || 1;
+      today().d += k;
+      if (cur) data.stats.fails[cur.name] = (data.stats.fails[cur.name] || 0) + k;
+      statsDirty = true;
+    },
+    streaks,
+    team: () => team,
     noteHelp() {
       if (!cur || cur.help) return;
       cur.help = true;
@@ -493,7 +566,7 @@
     // Médaille que l'on aurait en finissant maintenant (temps écoulé en secondes)
     tier(elapsed) {
       if (!cur || !cur.gold) return null;
-      return medalFor(elapsed, cur.gold, cur.silver);
+      return medalFor(elapsed, cur.gold, cur.silver, cur.diamond);
     },
     goldAt: () => (cur ? cur.gold : 0),
     silverAt: () => (cur ? cur.silver : 0),
@@ -511,6 +584,13 @@
     takeResume() { const r = pendingResume; pendingResume = null; return r; },
     peekResume: () => pendingResume,
   };
+
+  setInterval(() => {
+    if (!statsDirty) return;
+    statsDirty = false;
+    persist();
+    if ($('side-records') || $('panel-modal').classList.contains('show')) renderAll();
+  }, 60000);
 
   /* ---------- Champ « code d'équipe » du menu ---------- */
   const teamInput = $('team-code');

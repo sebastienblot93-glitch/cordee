@@ -87,7 +87,8 @@ const CUSTOM_TRACKS = {
   mist: { yt: 'Y-cWAGiVeF8', title: 'Musique des Brumes' },
   summit: { yt: 'fB8TyLTD7EE', start: 12, title: 'Musique du Sommet' },
 };
-const CUSTOM_VOLUME = 15; // 0 à 100 : volume de ces musiques (bas, pour ne pas couvrir les bruitages)
+const CUSTOM_VOLUME = 15; // 0 à 100 : volume de base de ces musiques (bas, pour ne pas couvrir les bruitages) ; le curseur « Musique » le multiplie
+const customVol = () => Math.min(100, CUSTOM_VOLUME * (window.Sfx.musicVolume() / 50));
 
 const Custom = {
   name: null, // thème dont la musique personnalisée joue en ce moment
@@ -104,9 +105,9 @@ const Custom = {
   sync() {
     const play = this.shouldPlay();
     try {
-      if (this.audio) { this.audio.volume = CUSTOM_VOLUME / 100; if (play) this.audio.play().catch(() => {}); else this.audio.pause(); }
+      if (this.audio) { this.audio.volume = customVol() / 100; if (play) this.audio.play().catch(() => {}); else this.audio.pause(); }
       if (this.player && this.ready && this.player.playVideo) {
-        this.player.setVolume(CUSTOM_VOLUME);
+        this.player.setVolume(customVol());
         if (play) this.player.playVideo(); else this.player.pauseVideo();
       }
     } catch { /* lecteur indisponible : sans importance */ }
@@ -174,7 +175,7 @@ const Custom = {
               try { this.player.seekTo(this.startAt || 0, true); this.player.playVideo(); } catch { /* ignore */ }
             }
           },
-          onReady: () => { this.ready = true; clearTimeout(this.guard); this.player.setVolume(CUSTOM_VOLUME); this.setRate(this.rate, true); this.sync(); },
+          onReady: () => { this.ready = true; clearTimeout(this.guard); this.player.setVolume(customVol()); this.setRate(this.rate, true); this.sync(); },
           onError: () => this.fail(this.name || name),
         },
       });
@@ -305,6 +306,9 @@ function handle(msg) {
       break;
     case 'emote':
       onEmote(msg);
+      break;
+    case 'mark':
+      onMark(msg);
       break;
     case 'start':
       startLevel(msg);
@@ -533,6 +537,7 @@ function reactToState(prev, msg) {
     burst(c.x, c.y, 'rgba(60,50,50,.5)', 3, 0.8, -0.02, 40, 9, { shape: 'smoke' });
   });
   if (burned) { sfx('burn', 120); shake(2); }
+  if (msg.deaths > prevWorldInfo.deaths && window.Progress) window.Progress.onDeath(msg.deaths - prevWorldInfo.deaths);
   if (msg.deaths > prevWorldInfo.deaths && !(msg.ev || []).some((e) => e[0] === 'die')) sfx('die');
   (msg.ev || []).forEach((e) => {
     if (e[0] === 'die') {
@@ -599,8 +604,9 @@ function reactToState(prev, msg) {
     });
     if (window.Progress && msg.res) {
       const medal = window.Progress.onResult(msg.res, msg.status === 'finished', myId === hostId);
-      if (medal === 'gold' || medal === 'silver') setTimeout(() => sfx('medal'), 500);
+      if (medal === 'diamond' || medal === 'gold' || medal === 'silver') setTimeout(() => sfx('medal'), 500);
     }
+    if (msg.res && level) Ghost.finish(msg.res, level);
   }
   prevWorldInfo.sr = msg.sr || 0;
   prevWorldInfo.door = msg.door;
@@ -762,6 +768,205 @@ function sendEmote(n) {
   send({ t: 'emote', e: n });
 }
 
+// Temps de jeu : on compte les secondes où une partie est réellement en cours (onglet visible)
+setInterval(() => {
+  if (level && world && world.status === 'playing' && !document.hidden && window.Progress) window.Progress.addPlay(5);
+}, 5000);
+
+/* ---------- Fantôme de la meilleure partie (discret : transparent, désactivable avec le bouton 👻) ---------- */
+const Ghost = {
+  on: true,
+  rec: null, // enregistrement en cours : { t0, last, ids, d: [] }
+  best: null, // fantôme affiché : { t, p: [{k, s, c}], n, pos: Float32Array }
+  startAt: 0,
+  SAMPLE_MS: 100,
+  key(name) { return `cordee.ghost.v1.${window.Progress ? window.Progress.team() : ''}.${name}`; },
+  decode(g) {
+    if (!g || g.v !== 1 || !Array.isArray(g.p) || !Array.isArray(g.d)) return null;
+    const np = g.p.length;
+    const w = np * 2 + 1;
+    const n = Math.floor(g.d.length / w);
+    if (n < 2) return null;
+    const pos = new Float32Array(n * np * 2);
+    const face = new Int8Array(n * np);
+    let cur = new Array(np * 2).fill(0);
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < np * 2; j++) {
+        cur[j] = i === 0 ? g.d[j] : cur[j] + g.d[i * w + j];
+        pos[i * np * 2 + j] = cur[j];
+      }
+      const m = g.d[i * w + np * 2];
+      for (let q = 0; q < np; q++) face[i * np + q] = m & (1 << q) ? -1 : 1;
+    }
+    return { t: g.t, p: g.p, np, n, pos, face };
+  },
+  load(name) {
+    try { return this.decode(JSON.parse(localStorage.getItem(this.key(name)))); } catch { return null; }
+  },
+  // Début de niveau : on prépare l'enregistrement et on charge le fantôme (local, puis celui de l'équipe s'il est plus rapide)
+  start(lv) {
+    this.startAt = performance.now();
+    this.rec = { t0: this.startAt, next: 0, d: [], ids: null, prev: null };
+    this.best = this.load(lv.name);
+    this.fetched = null;
+    const team = window.Progress ? window.Progress.team() : '';
+    if (team) {
+      const name = lv.name;
+      fetch(`/api/team/${encodeURIComponent(team)}/ghost/${encodeURIComponent(name)}`)
+        .then((r) => r.json())
+        .then((j) => {
+          if (!j || !j.ok || !j.ghost || !level || level.name !== name) return;
+          const g = this.decode(j.ghost);
+          if (g && (!this.best || g.t < this.best.t - 0.05)) {
+            this.best = g;
+            try { localStorage.setItem(this.key(name), JSON.stringify(j.ghost)); } catch { /* ignore */ }
+          }
+        })
+        .catch(() => {});
+    }
+  },
+  sample() {
+    const r = this.rec;
+    if (!r || !level || !world || world.status !== 'playing' || document.hidden) return;
+    const now = performance.now();
+    if (now < r.next) return;
+    r.next = Math.max(r.next + this.SAMPLE_MS, now - this.SAMPLE_MS);
+    if (!r.ids) {
+      r.ids = players.map((p) => p.id).sort();
+      r.look = r.ids.map((id) => { const p = players.find((q) => q.id === id) || {}; return { k: level.cfg.abilities ? p.role : 'plain', s: p.skin || 'tasse', c: p.color || '#ffffff' }; });
+    }
+    if (r.d.length >= (r.ids.length * 2 + 1) * 2400) return; // 4 minutes au maximum
+    const cur = [];
+    let mask = 0;
+    r.ids.forEach((id, q) => {
+      const s = sprites.get(id);
+      cur.push(s ? Math.round(s.tx) : (r.prev ? r.prev[q * 2] : 0), s ? Math.round(s.ty) : (r.prev ? r.prev[q * 2 + 1] : 0));
+      if (s && s.face < 0) mask |= 1 << q;
+    });
+    cur.forEach((v, j) => r.d.push(r.prev ? v - r.prev[j] : v));
+    r.d.push(mask);
+    r.prev = cur;
+  },
+  // Fin de niveau gagné : on garde cette partie si elle bat le fantôme actuel
+  finish(res, lv) {
+    const r = this.rec;
+    this.rec = null;
+    if (!r || !res || res.skipped || !r.ids || r.d.length < (r.ids.length * 2 + 1) * 5) return;
+    const t = Math.round((res.time / 60) * 10) / 10;
+    const old = this.load(lv.name);
+    if (old && old.t <= t) return;
+    const g = { v: 1, t, p: r.look, d: r.d };
+    try { localStorage.setItem(this.key(lv.name), JSON.stringify(g)); } catch { /* stockage plein : sans importance */ }
+    const team = window.Progress ? window.Progress.team() : '';
+    if (team) {
+      fetch(`/api/team/${encodeURIComponent(team)}/ghost/${encodeURIComponent(lv.name)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ghost: g }),
+      }).catch(() => {});
+    }
+  },
+  draw() {
+    const g = this.best;
+    if (!this.on || !g || !world || world.status !== 'playing' || !level) return;
+    const f = (performance.now() - this.startAt) / this.SAMPLE_MS;
+    if (f > g.n + 15) return; // le fantôme a terminé depuis un moment
+    const i = Math.min(Math.floor(f), g.n - 2);
+    const k = Math.min(1, f - i);
+    const fade = f > g.n - 1 ? Math.max(0, 1 - (f - (g.n - 1)) / 15) : 1;
+    const fr = Math.floor(f);
+    for (let q = 0; q < g.np; q++) {
+      const a = (i * g.np + q) * 2;
+      const b = ((i + 1) * g.np + q) * 2;
+      const x0 = g.pos[a];
+      const y0 = g.pos[a + 1];
+      const x = x0 + (g.pos[b] - x0) * k;
+      const y = y0 + (g.pos[b + 1] - y0) * k;
+      const vx = g.pos[b] - x0;
+      const vy = g.pos[b + 1] - y0;
+      const look = g.p[q];
+      ctx.save();
+      ctx.globalAlpha = 0.3 * fade;
+      Skins.draw(ctx, look.s, x, y, {
+        dir: g.face[(i * g.np) + q] || 1, color: look.c, t: fr * 0.6, kit: look.k, walk: Math.abs(vx) > 1 && Math.abs(vy) < 2 ? 1 : 0,
+        air: Math.abs(vy) > 1.5, vy: vy / 6, dash: false, look: { x: 0, y: 0 }, cast: null,
+      });
+      ctx.restore();
+    }
+  },
+};
+setInterval(() => Ghost.sample(), 50);
+try { Ghost.on = localStorage.getItem('cordee.ghost') !== '0'; } catch { /* ignore */ }
+function updateGhostButton() {
+  $('btn-ghost').classList.toggle('off', !Ghost.on);
+  $('btn-ghost').title = Ghost.on ? 'Fantôme de votre meilleure partie : affiché (cliquer pour le masquer)' : 'Fantôme de votre meilleure partie : masqué (cliquer pour l’afficher)';
+}
+$('btn-ghost').onclick = () => {
+  Ghost.on = !Ghost.on;
+  try { localStorage.setItem('cordee.ghost', Ghost.on ? '1' : '0'); } catch { /* ignore */ }
+  updateGhostButton();
+  window.Sfx.play('click');
+};
+$('btn-ghost').addEventListener('mousedown', (e) => e.preventDefault());
+updateGhostButton();
+
+/* ---------- Signal « regarde ici » (Ctrl + clic droit) ---------- */
+const marks = []; // { x, y, f0, color }
+let lastMarkAt = 0;
+function sendMark() {
+  const now = performance.now();
+  if (!level || !mouse.has || now - lastMarkAt < 1200) return;
+  lastMarkAt = now;
+  send({ t: 'mark', x: mouse.x, y: mouse.y });
+}
+function onMark(msg) {
+  if (!level) return;
+  const p = players.find((q) => q.id === msg.id);
+  const color = p ? p.color : '#ffd84a';
+  marks.length = 0; // un seul repère à la fois
+  marks.push({ x: msg.x, y: msg.y, f0: frame, color, id: msg.id });
+  window.Sfx.play('mark', 300);
+  ring(msg.x, msg.y, color, 56);
+  sparks(msg.x, msg.y, color, 8, 2.2, 30);
+}
+function drawMarks() {
+  const LIFE = 210;
+  for (let i = marks.length - 1; i >= 0; i--) {
+    const m = marks[i];
+    const age = frame - m.f0;
+    if (age > LIFE) { marks.splice(i, 1); continue; }
+    const fade = age > LIFE - 40 ? (LIFE - age) / 40 : 1;
+    const pulse = (age % 50) / 50;
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 8 + pulse * 26, 0, TAU);
+    ctx.globalAlpha = fade * (1 - pulse) * 0.9;
+    ctx.stroke();
+    ctx.globalAlpha = fade;
+    // petite flèche qui rebondit au-dessus du point
+    const by = m.y - 22 - Math.abs(Math.sin(age * 0.18)) * 7;
+    ctx.fillStyle = m.color;
+    ctx.strokeStyle = '#1a1030';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(m.x, by + 10);
+    ctx.lineTo(m.x - 9, by - 4);
+    ctx.lineTo(m.x - 3, by - 4);
+    ctx.lineTo(m.x - 3, by - 12);
+    ctx.lineTo(m.x + 3, by - 12);
+    ctx.lineTo(m.x + 3, by - 4);
+    ctx.lineTo(m.x + 9, by - 4);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, 3, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 function onEmote(msg) {
   const def = EMOTES[msg.e];
   if (!def || !level) return;
@@ -863,7 +1068,7 @@ function startLevel(msg) {
   level = {
     rows: msg.level, tile: T, keys, door, index: msg.index, total: msg.total, name: msg.name, hint: msg.hint, chapter,
     timer: msg.timer || 0,
-    gold: msg.gold || 0, silver: msg.silver || 0,
+    diamond: msg.diamond || 0, gold: msg.gold || 0, silver: msg.silver || 0,
     star: (L.stars && L.stars[0]) || null,
     theme: chapter.theme,
     cfg: {
@@ -894,6 +1099,8 @@ function startLevel(msg) {
   lastTl = -1;
   updateTimer.lastTier = null;
   emotes.clear();
+  marks.length = 0;
+  Ghost.start(level);
   updateRoleHint();
   updateTeamBar();
   updateBanner();
@@ -987,11 +1194,12 @@ function updateTimer() {
   // médaille que l'on aurait en finissant maintenant : or, puis argent, puis bronze
   const elapsed = level.timer - tl;
   const tier = playing && window.Progress ? window.Progress.tier(elapsed) : null;
-  const icon = tier === 'gold' ? ' 🥇' : tier === 'silver' ? ' 🥈' : tier === 'bronze' ? ' 🥉' : '';
+  const icon = tier === 'diamond' ? ' 💎' : tier === 'gold' ? ' 🥇' : tier === 'silver' ? ' 🥈' : tier === 'bronze' ? ' 🥉' : '';
   el.textContent = `⏱ ${fmtTime(tl)}${icon}`;
   el.className = playing && tl <= 10 ? 'urgent' : playing && tl <= 30 ? 'warn' : (tier || '');
   if (playing && tier !== updateTimer.lastTier) {
-    if (updateTimer.lastTier === 'gold' && tier === 'silver') toast('🥇 perdue… vise l’argent !');
+    if (updateTimer.lastTier === 'diamond' && tier === 'gold') toast('💎 perdu… vise l’or !');
+    else if (updateTimer.lastTier === 'gold' && tier === 'silver') toast('🥇 perdue… vise l’argent !');
     else if (updateTimer.lastTier === 'silver' && tier === 'bronze') toast('🥈 perdue… finis en bronze !');
     updateTimer.lastTier = tier;
   }
@@ -1096,6 +1304,7 @@ function helpHtml() {
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
     + '<li><kbd>T</kbd> échange ton rôle avec ton coéquipier (Mage ↔ Archer), à tout moment</li>'
     + '<li><kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
+    + '<li><kbd>Ctrl</kbd> + clic droit : « regarde ici », un repère visible par ton coéquipier</li>'
     + '<li><kbd>P</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
   if (kit === 'mage') {
     h += '<h4>Tu es le Mage</h4><ul>'
@@ -1339,6 +1548,15 @@ function updateMuteButton() {
 }
 $('btn-mute').onclick = () => { window.Sfx.toggle(); updateMuteButton(); window.Sfx.play('click'); };
 $('btn-music').onclick = () => { window.Sfx.toggleMusic(); updateMuteButton(); window.Sfx.play('click'); };
+const volSlider = $('music-vol');
+volSlider.value = window.Sfx.musicVolume();
+volSlider.title = `Volume de la musique : ${volSlider.value} %`;
+volSlider.oninput = () => {
+  const v = window.Sfx.setMusicVolume(volSlider.value);
+  volSlider.title = `Volume de la musique : ${v} %`;
+  Custom.sync();
+};
+['change', 'pointerup'].forEach((ev) => volSlider.addEventListener(ev, () => volSlider.blur())); // le curseur ne garde pas le clavier : les flèches restent pour le personnage
 [$('btn-mute'), $('btn-music')].forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()));
 updateMuteButton();
 
@@ -1441,6 +1659,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (!level) return;
   e.preventDefault();
   Object.assign(mouse, canvasPoint(e), { has: true });
+  if (e.button === 2 && (e.ctrlKey || e.metaKey)) return sendMark(); // Ctrl + clic droit : « regarde ici », pas un sort
   if (e.button === 0) cast(slotAvailable(armed) ? armed : 1);
   if (e.button === 2) cast(2);
 });
@@ -3002,6 +3221,7 @@ function draw() {
 
   if (level.cfg.link) drawTether();
 
+  Ghost.draw(); // derrière les vrais joueurs
   // ombres puis joueurs (le tien passe devant)
   const order = players.slice().sort((a, b) => (a.id === myId) - (b.id === myId));
   for (const p of order) {
@@ -3017,6 +3237,7 @@ function draw() {
 
   stepParts();
   drawParts();
+  if (marks.length) drawMarks();
 
   const mine = sprites.get(myId);
   if (mine && world.status === 'playing') drawAim(mine);

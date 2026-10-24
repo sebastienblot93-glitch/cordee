@@ -9,6 +9,9 @@
   try { muted = localStorage.getItem('cordee.muted') === '1'; } catch { /* stockage indisponible */ }
   try { musicOn = localStorage.getItem('cordee.music') !== '0'; } catch { /* stockage indisponible */ }
 
+  // Volume de la musique réglable (curseur) : 0 à 100, 50 = volume d'origine, 100 = deux fois plus fort
+  let musicVol = 50;
+  try { const v = localStorage.getItem('cordee.musicvol'); if (v !== null && v !== '' && Number.isFinite(Number(v))) musicVol = Math.max(0, Math.min(100, Number(v))); } catch { /* stockage indisponible */ }
   const MASTER_VOL = 0.13;
   const MUSIC_VOL = 0.15;
 
@@ -22,7 +25,7 @@
       master.gain.value = muted ? 0 : MASTER_VOL;
       master.connect(ac.destination);
       musicBus = ac.createGain();
-      musicBus.gain.value = MUSIC_VOL;
+      musicBus.gain.value = MUSIC_VOL * (musicVol / 50);
       musicBus.connect(master);
     } catch { ac = null; }
     return ac;
@@ -105,6 +108,7 @@
     burn: () => { noise(0.35, 0.45, 1200); },
     key: () => { tone(988, 988, 0.1, 'square', 0.3); tone(1319, 1319, 0.2, 'square', 0.3, 0.09); },
     star: () => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, f, 0.2, 'triangle', 0.32, i * 0.07)); tone(2637, 2637, 0.35, 'sine', 0.2, 0.3); },
+    mark: () => { tone(880, 1320, 0.14, 'sine', 0.35); tone(1760, 1760, 0.22, 'sine', 0.22, 0.1); },
     medal: () => { [659, 784, 988, 1319].forEach((f, i) => tone(f, f, 0.25, 'triangle', 0.3, 0.1 + i * 0.1)); },
     checkpoint: () => { tone(523, 523, 0.1, 'triangle', 0.4); tone(784, 784, 0.18, 'triangle', 0.4, 0.1); },
     door: () => { tone(330, 660, 0.3, 'triangle', 0.4); tone(494, 988, 0.3, 'triangle', 0.3, 0.1); },
@@ -374,6 +378,13 @@
     // 1 = tempo normal ; > 1 = plus rapide (dernières secondes d'un niveau chronométré)
     musicTempo(x) { mus.tempo = Math.max(0.5, Math.min(1.6, x || 1)); },
     musicEnabled: () => musicOn,
+    musicVolume: () => musicVol,
+    setMusicVolume(v) {
+      musicVol = Math.max(0, Math.min(100, Math.round(Number(v)) || 0));
+      try { localStorage.setItem('cordee.musicvol', String(musicVol)); } catch { /* ignore */ }
+      if (musicBus) musicBus.gain.value = MUSIC_VOL * (musicVol / 50);
+      return musicVol;
+    },
     setMusic(on) {
       musicOn = !!on;
       try { localStorage.setItem('cordee.music', musicOn ? '1' : '0'); } catch { /* ignore */ }
