@@ -65,7 +65,7 @@ app.get('/diag', async (req, res) => {
 app.get('/api/levels', (req, res) => {
   res.json({
     levels: LEVELS.map((l) => ({
-      name: l.name, chapter: l.chapter, timer: l.timer || 0, gold: l.gold, silver: l.silver,
+      name: l.name, chapter: l.chapter, timer: l.timer || 0, diamond: l.diamond, gold: l.gold, silver: l.silver,
       star: l.rows.some((r) => r.includes('*')),
     })),
     chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
@@ -193,12 +193,12 @@ async function teamHandler(req, res) {
 app.get('/savedata.js', (req, res) => res.sendFile(path.join(__dirname, 'savedata.js')));
 app.get('/api/storage', (req, res) => res.json({ mode: storeMode, durable: storeMode === 'upstash' }));
 // Les navigateurs envoient la sauvegarde en JSON (sendBeacon compris) ; on la lit nous-mêmes pour accepter tous les types de contenu
-app.post('/api/team/:code', (req, res, next) => {
+app.post(['/api/team/:code', '/api/team/:code/ghost/:name'], (req, res, next) => {
   let size = 0;
   const chunks = [];
   req.on('data', (c) => {
     size += c.length;
-    if (size > 65536) { req.destroy(); return; }
+    if (size > 98304) { req.destroy(); return; }
     chunks.push(c);
   });
   req.on('end', () => {
@@ -207,6 +207,62 @@ app.post('/api/team/:code', (req, res, next) => {
   });
   req.on('error', () => {});
 });
+// Fantôme de la meilleure partie d'une équipe : un petit enregistrement par niveau, on ne garde que le plus rapide
+const ghostCache = new Map();
+function cleanGhost(g) {
+  if (!g || typeof g !== 'object' || g.v !== 1) return null;
+  const t = Number(g.t);
+  if (!Number.isFinite(t) || t <= 0 || t > 3600) return null;
+  if (!Array.isArray(g.p) || g.p.length < 1 || g.p.length > 2 || !Array.isArray(g.d)) return null;
+  const w = g.p.length * 2 + 1; // par échantillon : x, y de chaque joueur + un masque de regard
+  if (g.d.length < 2 * w || g.d.length > w * 3000 || g.d.length % w !== 0) return null;
+  const p = g.p.map((q) => ({
+    k: ['mage', 'archer', 'plain'].includes(q && q.k) ? q.k : 'plain',
+    s: cleanSkin(q && q.s),
+    c: /^#[0-9a-f]{6}$/i.test(q && q.c) ? q.c : '#ffffff',
+  }));
+  const d = g.d.map((x) => Math.round(Number(x)));
+  if (d.some((x) => !Number.isFinite(x) || Math.abs(x) > 100000)) return null;
+  return { v: 1, t: Math.round(t * 10) / 10, p, d };
+}
+async function ghostHandler(req, res) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  const reply = (status, obj) => { res.statusCode = status; res.end(JSON.stringify(obj)); };
+  const team = teamKey(req.params.code);
+  const name = String(req.params.name || '');
+  if (!team || !name || name.length > 60) return reply(400, { ok: false, error: 'Requête invalide.' });
+  if (!rateOk(req.ip || (req.socket && req.socket.remoteAddress) || '?')) return reply(429, { ok: false, error: 'Trop de requêtes.' });
+  const key = `ghost:${team}:${name}`;
+  try {
+    const out = await withLock(key, async () => {
+      let cur = ghostCache.get(key);
+      if (cur === undefined) {
+        let raw = null;
+        if (storeMode === 'upstash') raw = await upstash(['GET', `cordee:${key}`]);
+        else if (fileDb) raw = fileDb[key] || null;
+        try { cur = raw ? cleanGhost(typeof raw === 'string' ? JSON.parse(raw) : raw) : null; } catch { cur = null; }
+        if (ghostCache.size > 60) ghostCache.clear();
+        ghostCache.set(key, cur);
+      }
+      if (req.method !== 'POST') return cur;
+      const neu = cleanGhost(req.body && req.body.ghost);
+      if (neu && (!cur || neu.t < cur.t - 0.05)) {
+        const raw = JSON.stringify(neu);
+        if (storeMode === 'upstash') await upstash(['SET', `cordee:${key}`, raw]);
+        else if (fileDb) { fileDb[key] = raw; saveFile(); }
+        ghostCache.set(key, neu);
+        return neu;
+      }
+      return cur;
+    });
+    reply(200, { ok: true, ghost: out || null });
+  } catch (e) {
+    console.error('Fantôme :', errText(e));
+    reply(503, { ok: false, error: 'Base de sauvegarde indisponible.' });
+  }
+}
+app.get('/api/team/:code/ghost/:name', ghostHandler);
+app.post('/api/team/:code/ghost/:name', ghostHandler);
 app.get('/api/team/:code', teamHandler);
 app.post('/api/team/:code', teamHandler);
 if (process.env.CORDEE_TEST) global.__teamHandler = teamHandler;
@@ -631,6 +687,7 @@ function startMsg(room) {
     name: def.name,
     hint: def.hint,
     timer: def.timer || 0, // secondes (0 = pas de minuteur)
+    diamond: def.diamond, // médaille de diamant : temps (en secondes) à ne pas dépasser
     gold: def.gold, // médaille d'or : temps (en secondes) à ne pas dépasser
     silver: def.silver,
     star: def.rows.some((r) => r.includes('*')),
@@ -980,6 +1037,23 @@ wss.on('connection', (ws) => {
         if (now < (me.emoteUntil || 0)) return;
         me.emoteUntil = now + 600;
         broadcast(room, { t: 'emote', id: ws.id, e: n });
+        break;
+      }
+      case 'mark': {
+        // « Regarde ici » (Ctrl + clic droit) : un repère visible par tout le duo, au plus un toutes les 1,2 s par joueur
+        const me = room && room.players.get(ws.id);
+        const x = Number(msg.x);
+        const y = Number(msg.y);
+        if (!me || room.status !== 'playing' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+        const now = Date.now();
+        if (now < (me.markUntil || 0)) return;
+        me.markUntil = now + 1200;
+        const L = room.level;
+        broadcast(room, {
+          t: 'mark', id: ws.id,
+          x: Math.round(Math.min(Math.max(x, 0), L.w * TILE)),
+          y: Math.round(Math.min(Math.max(y, 0), L.h * TILE)),
+        });
         break;
       }
       case 'start': {
