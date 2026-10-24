@@ -70,6 +70,10 @@
       label: 'Brumes', sky: ['#35516b', '#b1c9d8'], light: false,
       tile: { base: '#5d778b', dark: '#455d70', top: '#cfe3ef', topDark: '#9ab5c6', out: '#16222d', pattern: 'brick', frost: true },
     },
+    summit: {
+      label: 'Sommet', sky: ['#0b1030', '#d9627f'], light: false,
+      tile: { base: '#4b5f82', dark: '#34445f', top: '#f1f7ff', topDark: '#bfd2ea', out: '#0f1a30', pattern: 'brick', frost: true, glow: '#8ec8ff' },
+    },
   };
 
   function get(id) { return THEMES[id] || THEMES.arcane; }
@@ -298,6 +302,17 @@
     } else if (id === 'mist') {
       sg.globalCompositeOperation = 'lighter';
       halo(sg, w * 0.74, h * 0.28, 150, '#f4fbff', 0.7);
+      sg.globalCompositeOperation = 'source-over';
+    } else if (id === 'summit') {
+      for (let i = 0; i < 90; i++) { // étoiles
+        sg.fillStyle = `rgba(255,255,255,${0.25 + r() * 0.5})`;
+        sg.beginPath();
+        sg.arc(r() * w, r() * h * 0.55, 0.5 + r() * 1.0, 0, TAU);
+        sg.fill();
+      }
+      sg.globalCompositeOperation = 'lighter';
+      halo(sg, w * 0.78, h * 0.62, 190, '#ffb38a', 0.55); // soleil couchant derrière les crêtes
+      halo(sg, w * 0.2, h * 0.2, 90, '#bcd8ff', 0.4);
       sg.globalCompositeOperation = 'source-over';
     }
 
@@ -636,6 +651,26 @@
       });
       L(0.75, (g) => {
         for (let i = 0; i < 7; i++) pine(g, xr(), h + 8, 1.2 + r() * 0.8, '#2a4458', 'rgba(8,16,24,.7)');
+      });
+    } else if (id === 'summit') {
+      L(0.1, (g) => { // pics lointains enneigés
+        ridge(g, w, h, m, h * 0.52, 62, 0.0065, 2, '#5b4a78');
+        g.fillStyle = 'rgba(255,225,235,.85)';
+        for (let x = -m; x < w + m; x += 4) {
+          const y = ridgeY(x, h * 0.52, 62, 0.0065, 2);
+          if (y < h * 0.52 - 30) g.fillRect(x, y, 4, 8 + (h * 0.52 - 30 - y) * 0.35);
+        }
+      });
+      L(0.35, (g) => {
+        ridge(g, w, h, m, h * 0.7, 28, 0.01, 4, '#3b3a66', 'rgba(255,200,215,.35)');
+        for (let i = 0; i < 12; i++) {
+          const x = xr();
+          pine(g, x, ridgeY(x, h * 0.7, 28, 0.01, 4) + 6, 0.8 + r() * 0.6, '#27304f', 'rgba(8,10,28,.7)');
+        }
+      });
+      L(0.75, (g) => {
+        ridge(g, w, h, m, h * 0.9, 14, 0.014, 1, '#1b2142', 'rgba(190,215,255,.4)');
+        for (let i = 0; i < 6; i++) pine(g, xr(), h + 8, 1.3 + r() * 0.8, '#161c3a', 'rgba(4,6,18,.75)');
       });
     }
     return bg;
@@ -1077,7 +1112,7 @@
   function makeDecor(id, w, h, seed) {
     const r = rng(seed * 131 + 5);
     const items = [];
-    const n = { prairie: 40, arcane: 100, dark: 40, sanctuary: 60, garden: 56, forge: 70, mist: 40 }[id] || 30;
+    const n = { prairie: 40, arcane: 100, dark: 40, sanctuary: 60, garden: 56, forge: 70, mist: 40, summit: 70 }[id] || 30;
     for (let i = 0; i < n; i++) items.push({ x: r() * w, y: r() * h, s: 0.5 + r(), p: r() * TAU, k: r(), i });
     return items;
   }
@@ -1387,6 +1422,29 @@
           halo(g, x, y, 5 + o.s * 3, o.k > 0.5 ? '#ff8a2a' : '#ffc24a', 0.5 + o.k * 0.4);
           g.restore();
         }
+      });
+    } else if (id === 'summit') {
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) { // aurore
+        const k = g.createLinearGradient(0, 0, 0, h * 0.5);
+        k.addColorStop(0, `rgba(${i === 1 ? '255,120,200' : '80,255,200'},0)`);
+        k.addColorStop(0.5, `rgba(${i === 1 ? '255,120,200' : '80,255,200'},${0.05 + 0.03 * Math.sin(t * 0.01 + i * 2)})`);
+        k.addColorStop(1, `rgba(${i === 1 ? '255,120,200' : '80,255,200'},0)`);
+        g.fillStyle = k;
+        const x0 = 80 + i * 280 + Math.sin(t * 0.006 + i) * 40;
+        g.beginPath();
+        g.moveTo(x0, 0); g.lineTo(x0 + 140, 0); g.lineTo(x0 + 220 + Math.sin(t * 0.01 + i) * 40, h * 0.5); g.lineTo(x0 + 40, h * 0.5);
+        g.fill();
+      }
+      g.restore();
+      items.forEach((o, i) => { // flocons
+        const x = wrap(o.x + Math.sin(t * 0.02 + o.p) * 14 - t * 0.35 * o.s, w);
+        const y = wrap(o.y + t * (0.5 + o.s * 0.5), h);
+        g.fillStyle = `rgba(255,255,255,${0.35 + o.k * 0.4})`;
+        g.beginPath();
+        g.arc(x, y, 0.9 + o.s * 1.1, 0, TAU);
+        g.fill();
       });
     } else if (id === 'mist') {
       items.forEach((o, i) => {
