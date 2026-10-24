@@ -42,13 +42,14 @@ app.get(['/', '/index.html', '/client.js', '/progress.js', '/audio.js', '/skins.
 });
 
 // Page de diagnostic : ouvrez /diag dans le navigateur
-app.get('/diag', (req, res) => {
+app.get('/diag', async (req, res) => {
   const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
   const lines = [
     'Cordée - ' + BUILD,
     'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 30)',
     'Chapitres : ' + CHAPTERS.length + ' (attendu : 8)',
     'Sauvegarde des records : ' + (storeMode === 'upstash' ? 'en ligne (Upstash) - durable' : storeMode === 'file' ? 'fichier local - effacé à chaque redémarrage sur Render' : 'mémoire - perdue au redémarrage') + ' (savedata.js : ' + size(path.join(__dirname, 'savedata.js')) + ')',
+    ...(storeMode === 'upstash' ? await upstashDiag() : []),
     '',
     'Fichiers dans public/ :',
     ...WEB_FILES.map((f) => '  ' + f + ' : ' + size(path.join(PUBLIC_DIR, f))),
@@ -85,6 +86,19 @@ const teamCache = new Map(); // clé -> sauvegarde (copie en mémoire : évite d
 let fileDb = null;
 let storeMode = 'memory';
 
+// Message d'erreur lisible, avec la vraie cause (« fetch failed » seul ne dit rien)
+function errText(e) {
+  const c = e && e.cause;
+  return (e && e.message) + (c ? ` [${c.code || c.name || ''} ${c.message || ''}]`.replace(/\s+\]/, ']') : '');
+}
+// Utilisé par /diag : teste la connexion à Upstash sans jamais afficher le jeton
+async function upstashDiag() {
+  let addr = '(illisible)';
+  try { const u = new URL(UP_URL); addr = `${u.protocol}//${u.host}${u.pathname.length > 1 ? u.pathname : ''}`; } catch { addr = `(adresse invalide : « ${UP_URL.slice(0, 12)}… »)`; }
+  const out = [`  Adresse lue : ${addr}`, `  Jeton : ${UP_TOKEN.length} caractères`];
+  try { await upstash(['PING']); await upstash(['SET', 'cordee:diag', String(Date.now())]); out.push('  Test lecture + écriture : OK'); } catch (e) { out.push('  Test Upstash : ÉCHEC - ' + errText(e)); }
+  return out;
+}
 async function upstash(cmd) {
   const r = await fetch(UP_URL, {
     method: 'POST',
@@ -172,7 +186,7 @@ async function teamHandler(req, res) {
     });
     reply(200, { ok: true, data: out, durable: storeMode === 'upstash' });
   } catch (e) {
-    console.error('Sauvegarde équipe :', e.message);
+    console.error('Sauvegarde équipe :', errText(e));
     reply(503, { ok: false, error: 'Base de sauvegarde indisponible.' });
   }
 }
