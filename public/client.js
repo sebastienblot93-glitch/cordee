@@ -83,6 +83,9 @@ const CUSTOM_TRACKS = {
   dark: { yt: 'VMUmA6YszKs', start: 48, title: 'Laura Ferré · Lucifer' },
   sanctuary: { yt: 'kQWoeq1oAbc', title: 'AXMO x Aki Hiro · Castle In The Sky' },
   garden: { yt: 'BtyHYIpykN0', start: 122, title: 'PNL · Au DD' },
+  forge: { yt: 'oL-y9O8FD14', title: 'Musique de la Forge' },
+  mist: { yt: 'Y-cWAGiVeF8', title: 'Musique des Brumes' },
+  summit: { yt: 'fB8TyLTD7EE', start: 12, title: 'Musique du Sommet' },
 };
 const CUSTOM_VOLUME = 15; // 0 à 100 : volume de ces musiques (bas, pour ne pas couvrir les bruitages)
 
@@ -209,7 +212,7 @@ function setTempo(x) {
 function freshWorld(lv) {
   return {
     status: 'playing', keys: [], open: [], pressed: [], door: lv.keys.length === 0,
-    cr: [], tg: [], tc: [], bn: [], bt: [], seq: { p: 0, done: false, flash: false }, sh: [], ice: [], proj: [], cps: [], cd: [],
+    cr: [], tg: [], tc: [], bn: [], bt: [], seq: { p: 0, done: false, flash: false }, sh: [], ice: [], proj: [], cps: [], cph: [], cd: [],
     lk: 1, ld: 0, sy: 0, jw: new Map(), cy: [],
     deaths: 0, tl: lv.timer || 0, recvAt: performance.now(),
   };
@@ -662,7 +665,7 @@ function applyState(msg) {
   world = {
     status: msg.status, keys: msg.keys, open: msg.open, pressed: msg.pressed, door: msg.door,
     cr: msg.cr, tg: msg.tg, tc: msg.tc || [], bn: msg.bn || [], bt: msg.bt || [], seq: msg.seq, sh: msg.sh, ice: msg.ice,
-    proj: msg.proj, cps: msg.cps, cd: msg.cd, deaths: msg.deaths,
+    proj: msg.proj, cps: msg.cps, cph: msg.cph || [], cd: msg.cd, deaths: msg.deaths,
     lk: msg.lk === undefined ? 1 : msg.lk, ld: msg.ld || 0, sy: msg.sy || 0, cy: msg.cy || [],
     jw: new Map(msg.p.map((q, i) => [q[0], (msg.jw || [])[i] || 0])), tl: msg.tl || 0, recvAt: performance.now(),
   };
@@ -1787,8 +1790,8 @@ function drawTarget(t, T, active) {
   ctx.fill();
 }
 
-function drawCheckpoint(c, T, active, frame) {
-  const col = active ? '#9be564' : '#8a86bc';
+function drawCheckpoint(c, T, active, frame, half) {
+  const col = active ? '#9be564' : half ? '#ffb347' : '#8a86bc';
   if (active) glowAt(c.x + 23, c.y + 10, 28, '#9be564', 0.5);
   rrPath(c.x + 13.5, c.y + 3, 3.4, T - 3, 1.5);
   fillOut('#e0e3f6', 1.4);
@@ -2826,7 +2829,7 @@ function draw() {
     }
   });
 
-  L.checkpoints.forEach((c, i) => drawCheckpoint(c, T, world.cps.includes(i), frame));
+  L.checkpoints.forEach((c, i) => drawCheckpoint(c, T, world.cps.includes(i), frame, (world.cph || []).includes(i)));
   L.torches.forEach((t, i) => drawTorch(t, T, !!world.tc[i], frame));
   L.crystals.forEach((c, i) => {
     const seqShape = c.seqIndex >= 0 ? c.seqIndex % 3 : -1;
