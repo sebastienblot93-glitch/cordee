@@ -1304,103 +1304,81 @@
     },
   };
 
-  /* 13. Sylvain Durif (caricature douce : longue chevelure, grande barbe, tunique claire) */
+  /* 13. Sylvain Durif (caricature : front dégarni, cheveux gris bouclés ébouriffés, regard froncé, chemise en jean) */
   STYLES.durif = {
-    tone: '#f0c9a2', pants: '#e6e0d0', shoe: '#8a6a44',
-    body: () => '#f4f1e8', arm: () => '#f4f1e8',
+    tone: '#ecc6a3', pants: '#39425a', shoe: '#2b2a33',
+    body: () => '#3f5573', arm: () => '#3f5573',
     back(g, P, o, C) {
-      // longue chevelure derrière la tête et les épaules
-      const sw = Math.sin(P.t * 0.09) * 1.2 + (P.walk > 0.05 ? Math.sin(P.ph) * 1.6 : 0) + (P.air ? (P.up ? 2.4 : -1.6) : 0);
-      g.beginPath();
-      g.moveTo(HX - 9.4, HY - 3);
-      g.quadraticCurveTo(HX - 14.6, HY + 6, HX - 12.2 - sw * 0.4, HY + 14.4);
-      g.quadraticCurveTo(HX - 11 - sw, HY + 19.6, HX - 6.6 - sw * 0.6, HY + 17.6);
-      g.quadraticCurveTo(HX - 2, HY + 12, HX + 4, HY + 6);
-      g.lineTo(HX + 4, HY - 6);
-      g.closePath();
-      paint(g, grad(g, 0, HY - 4, 0, HY + 19, '#6a5444', '#3f3026'), 1.4);
-      g.strokeStyle = 'rgba(190,170,150,.55)';
-      g.lineWidth = 0.9;
-      g.lineCap = 'round';
-      g.beginPath();
-      g.moveTo(HX - 9.6, HY + 1);
-      g.quadraticCurveTo(HX - 11.6 - sw * 0.3, HY + 8, HX - 9.4 - sw * 0.6, HY + 15.4);
-      g.stroke();
+      // nuage de boucles grises derrière la tête
+      const sw = Math.sin(P.t * 0.08) * 0.6 + (P.air ? (P.up ? 1.6 : -1.2) : 0);
+      const curls = [[-11.2, -9], [-12.6, -3], [-12.4, 3], [-10.4, 8.4], [-7, 11], [-3, -12.6], [-8.2, -12], [3, -13.4], [-12, -7]];
+      curls.forEach(([dx, dy], i) => {
+        const r = 3.6 + (i % 3) * 0.5;
+        ell(g, HX + dx - sw * (dx < -9 ? 0.4 : 0), HY + dy + sw * 0.2, r, r * 0.92, i % 2 ? '#8d857b' : '#6f675e', 1.2);
+      });
     },
     torso(g, P, o, C) {
-      // tunique longue, plissée, avec une écharpe de la couleur du joueur
+      // chemise en jean : col, boutonnière, poche de la couleur du joueur
       g.beginPath();
-      g.moveTo(-6.8, -10.6);
-      g.lineTo(7, -10.6);
-      g.lineTo(8.4, -3.6);
-      g.quadraticCurveTo(0.8, -1.8 + Math.sin(P.t * 0.12) * 0.5, -8, -3.6);
+      g.moveTo(-3.8, -21.4); g.lineTo(0.8, -17); g.lineTo(5.4, -21.4); g.lineTo(3.2, -22.6); g.lineTo(0.8, -19.6); g.lineTo(-1.6, -22.6);
       g.closePath();
-      paint(g, grad(g, 0, -10.6, 0, -2.4, '#f6f3ea', '#d9d3c2'), 1.4);
-      g.strokeStyle = 'rgba(120,110,90,.35)';
+      paint(g, '#4d6788', 1.1);
+      g.strokeStyle = 'rgba(15,20,40,.45)';
       g.lineWidth = 0.9;
-      g.beginPath();
-      g.moveTo(-2.4, -9.6); g.lineTo(-3.4, -3.4);
-      g.moveTo(2.6, -9.6); g.lineTo(3.8, -3.4);
-      g.stroke();
-      // écharpe en diagonale
-      g.beginPath();
-      g.moveTo(-6.4, -20.6);
-      g.lineTo(-2.6, -21);
-      g.lineTo(6.8, -11.4);
-      g.lineTo(3.2, -10.4);
-      g.closePath();
-      paint(g, C.col, 1.2);
-      // petite cordelette dorée à la taille
-      box(g, -6.8, -11.2, 13.8, 1.7, 0.8, '#d9b24a', 1);
+      g.beginPath(); g.moveTo(0.8, -17); g.lineTo(0.8, -9.4); g.stroke();
+      g.fillStyle = '#c8d3e4';
+      [-15, -12, -9.8].forEach((y) => { g.beginPath(); g.arc(0.8, y, 0.55, 0, TAU); g.fill(); });
+      box(g, -4.8, -15.6, 3.8, 3.6, 0.8, C.col, 0.9);
+      g.strokeStyle = 'rgba(190,205,230,.35)';
+      g.lineWidth = 0.7;
+      g.beginPath(); g.moveTo(-6.2, -20.4); g.lineTo(-6.2, -9.6); g.moveTo(7.4, -20.4); g.lineTo(7.4, -9.6); g.stroke();
     },
     head(g, P, o, C) {
-      humanHead(g, P, o, this, undefined, { noMouth: true, noBlush: true });
-      // barbe fournie qui descend sur la poitrine
-      const sway = Math.sin(P.t * 0.1) * 0.6;
-      g.beginPath();
-      g.moveTo(HX - 7.4, HY + 1.6);
-      g.quadraticCurveTo(HX - 9.4, HY + 10.4, HX - 2.4, HY + 15.4 + sway);
-      g.quadraticCurveTo(HX + 1.6, HY + 19, HX + 5.6, HY + 14.2 + sway);
-      g.quadraticCurveTo(HX + 11, HY + 10.6, HX + 9.8, HY + 2.2);
-      g.quadraticCurveTo(HX + 5.4, HY + 5.2, HX + 1, HY + 3.6);
-      g.quadraticCurveTo(HX - 3.4, HY + 5.2, HX - 7.4, HY + 1.6);
-      g.closePath();
-      paint(g, grad(g, 0, HY + 2, 0, HY + 19, '#7a6350', '#4a392d'), 1.4);
-      g.strokeStyle = 'rgba(210,198,184,.55)';
-      g.lineWidth = 0.9;
+      // crâne haut et dégarni, yeux gris-bleu
+      humanHead(g, P, o, this, undefined, { noMouth: true, noBlush: true, iris: '#6f8aa6' });
+      // plis du front
+      g.strokeStyle = 'rgba(150,100,70,.45)';
+      g.lineWidth = 0.8;
       g.lineCap = 'round';
       g.beginPath();
-      g.moveTo(HX - 3.6, HY + 7.4); g.quadraticCurveTo(HX - 3, HY + 11.6, HX - 1.6, HY + 14.2);
-      g.moveTo(HX + 5.2, HY + 7.6); g.quadraticCurveTo(HX + 5.6, HY + 11, HX + 4.4, HY + 13.4);
+      g.moveTo(HX - 2.6, HY - 6.2); g.quadraticCurveTo(HX + 2, HY - 7.2, HX + 6.6, HY - 6.2);
+      g.moveTo(HX - 1.8, HY - 8); g.quadraticCurveTo(HX + 2, HY - 8.8, HX + 5.6, HY - 8);
       g.stroke();
-      // moustache et petit sourire
-      ell(g, HX + 4, HY + 4.4, 4.4, 1.5, '#6a5444', 1, 0.08);
-      g.strokeStyle = OUT;
-      g.lineWidth = 1.1;
-      g.beginPath();
-      g.arc(HX + 4.2, HY + 6.4, 1.7, 0.2 * Math.PI, 0.8 * Math.PI);
-      g.stroke();
-      // sourcils calmes
-      g.strokeStyle = '#4a392d';
+      // sourcils froncés
+      g.strokeStyle = '#7b6f63';
       g.lineWidth = 1.5;
       g.beginPath();
-      g.moveTo(HX - 1.4, HY - 3.1); g.lineTo(HX + 2.6, HY - 3.7);
-      g.moveTo(HX + 4.4, HY - 3.7); g.lineTo(HX + 8, HY - 3);
+      g.moveTo(HX - 2.2, HY - 2.6); g.lineTo(HX + 2.8, HY - 3.9);
+      g.moveTo(HX + 4.2, HY - 3.9); g.lineTo(HX + 8.4, HY - 2.4);
       g.stroke();
-      // cheveux : calotte et raie au milieu, mèches qui tombent devant l'oreille
+      // cernes
+      g.strokeStyle = 'rgba(120,90,110,.35)';
+      g.lineWidth = 0.8;
       g.beginPath();
-      g.moveTo(HX - 9.8, HY + 1.4);
-      g.quadraticCurveTo(HX - 11.4, HY - 9.4, HX - 1, HY - 10.6);
-      g.quadraticCurveTo(HX + 9, HY - 11.4, HX + 9.8, HY - 3.4);
-      g.quadraticCurveTo(HX + 4.6, HY - 6.6, HX + 0.6, HY - 5.2);
-      g.quadraticCurveTo(HX - 4.6, HY - 6, HX - 6.6, HY + 1.2);
-      g.quadraticCurveTo(HX - 7.6, HY + 6.4, HX - 9.8, HY + 1.4);
-      g.closePath();
-      paint(g, grad(g, 0, HY - 11, 0, HY + 2, '#6a5444', '#4a392d'), 1.4);
-      g.strokeStyle = 'rgba(190,170,150,.55)';
+      g.arc(HX + 0.4, HY + 3.6, 2.6, 0.2 * Math.PI, 0.8 * Math.PI);
+      g.arc(HX + 5.8, HY + 3.6, 2.6, 0.2 * Math.PI, 0.8 * Math.PI);
+      g.stroke();
+      // nez
+      g.strokeStyle = 'rgba(150,100,70,.55)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(HX + 3.6, HY + 1.4); g.lineTo(HX + 3.2, HY + 5); g.lineTo(HX + 5, HY + 5.4);
+      g.stroke();
+      // bouche entrouverte
+      const open = P.air || P.castAng !== null || P.dash;
+      ell(g, HX + 4.2, HY + 7.6, 3.2, 1.4 + (open ? 1.2 : 0.3), '#c47a82', 1.1);
+      if (!open) { g.fillStyle = '#f3e8e0'; g.fillRect(HX + 2.4, HY + 7.1, 3.6, 0.9); }
+      // cheveux gris bouclés : touffes sur les côtés et au-dessus de l'oreille, quelques mèches fines sur le crâne
+      const sw = Math.sin(P.t * 0.08) * 0.5;
+      [[-9.2, -4], [-10, 1.4], [-9, 6.4], [-6, 8.4], [9.6, -7], [10.2, -3.4]].forEach(([dx, dy], i) => {
+        const r = 3.1 + (i % 2) * 0.5;
+        ell(g, HX + dx + (dx < 0 ? -sw : sw * 0.4), HY + dy, r, r * 0.9, i % 2 ? '#928a80' : '#756d63', 1.1);
+      });
+      g.strokeStyle = '#6f675e';
       g.lineWidth = 0.9;
       g.beginPath();
-      g.moveTo(HX - 4.4, HY - 8.6); g.quadraticCurveTo(HX + 1, HY - 10, HX + 6, HY - 7.4);
+      g.moveTo(HX - 6, HY - 7.8); g.quadraticCurveTo(HX - 2, HY - 11.4, HX + 2, HY - 9.6);
+      g.moveTo(HX + 3, HY - 10.2); g.quadraticCurveTo(HX + 6.4, HY - 11, HX + 8.2, HY - 8.2);
       g.stroke();
     },
   };
