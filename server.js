@@ -294,10 +294,22 @@ function respawn(room, p) {
   room.events.push(['die', Math.round(p.x), Math.round(p.y)]);
 }
 
-// Les pics renvoient toujours au départ du niveau (le niveau, lui, n'est pas remis à zéro)
+// Les pics renvoient au dernier drapeau validé (ou au départ). Un drapeau n'est validé
+// que lorsque TOUS les joueurs l'ont atteint ; le niveau, lui, n'est jamais remis à zéro.
 function hazardsAndCheckpoints(room, list) {
   const L = room.level;
   for (const p of list) if (hitsSpikes(L, p)) respawn(room, p);
+  L.checkpoints.forEach((cp, i) => {
+    if (room.cps.has(i)) return;
+    const zone = { x: cp.x + 4, y: cp.y, w: TILE - 8, h: TILE };
+    let seen = room.cpSeen.get(i);
+    if (!seen) { seen = new Set(); room.cpSeen.set(i, seen); }
+    for (const p of list) if (touchesRect(p, zone)) seen.add(p.id);
+    if (list.length && list.every((p) => seen.has(p.id))) {
+      room.cps.add(i);
+      room.respawn = { x: cp.x + (TILE - PW) / 2, y: cp.y + TILE - PH };
+    }
+  });
 }
 
 /* ---------- Sorts et tirs ---------- */
@@ -484,6 +496,7 @@ function freshRoomState(room, index) {
   room.projectiles = [];
   room.ice = [];
   room.cps = new Set();
+  room.cpSeen = new Map(); // drapeau -> joueurs qui l'ont atteint
   room.respawn = { ...room.level.spawn };
   room.deaths = 0;
   room.latch = {};
@@ -548,6 +561,7 @@ function stateMsg(room, list) {
     ice: room.ice.map((b) => [b.idx % L.w, Math.floor(b.idx / L.w), b.until - t]),
     proj: room.projectiles.map((pr) => [pr.kind, Math.round(pr.x * 10) / 10, Math.round(pr.y * 10) / 10, Math.round(pr.vx * 100) / 100, Math.round(pr.vy * 100) / 100]),
     cps: [...room.cps],
+    cph: [...room.cpSeen].filter(([i, set]) => !room.cps.has(i) && set.size > 0).map(([i]) => i),
     cd: list.map((p) => [
       p.id,
       cdRatio(p.cd[0], p.kit === 'archer' ? SPELL.cdArrow : SPELL.cdOrb),
