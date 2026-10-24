@@ -214,7 +214,7 @@ function freshWorld(lv) {
     status: 'playing', keys: [], open: [], pressed: [], door: lv.keys.length === 0,
     cr: [], tg: [], tc: [], bn: [], bt: [], seq: { p: 0, done: false, flash: false }, sh: [], ice: [], proj: [], cps: [], cph: [], cd: [],
     lk: 1, ld: 0, sy: 0, jw: new Map(), cy: [],
-    deaths: 0, tl: lv.timer || 0, recvAt: performance.now(),
+    deaths: 0, tl: lv.timer || 0, recvAt: performance.now(), sr: 0, res: null,
   };
 }
 
@@ -290,6 +290,7 @@ function handle(msg) {
         lastChapter = -1;
         sprites.clear();
         $('banner').classList.remove('show');
+        if (window.Progress) window.Progress.hideResult();
         renderLobby();
       } else if (level) {
         updateHud();
@@ -432,7 +433,7 @@ function drawParts() {
 
 /* ---------- Réaction aux changements d'état (sons + effets) ---------- */
 const springAnim = new Map(); // index de case -> images restantes
-const prevWorldInfo = { door: false, keys: 0, cps: 0, status: 'playing', deaths: 0 };
+const prevWorldInfo = { door: false, keys: 0, cps: 0, status: 'playing', deaths: 0, sr: 0 };
 
 function tileCenter(idx) {
   const w = level.L.w;
@@ -577,6 +578,16 @@ function reactToState(prev, msg) {
       sparks(e[1], e[2], '#ffffff', 5, 2.6, 20);
     }
   });
+  if (msg.sr && !prevWorldInfo.sr && level.star) {
+    const st = level.star;
+    const first = window.Progress ? window.Progress.onStar(level.name) : true;
+    sfx('star');
+    burst(st.x + 16, st.y + 16, '#ffe27a', 16, 3.2, 0.03, 36);
+    sparks(st.x + 16, st.y + 16, '#ffffff', 12, 3.8, 40);
+    ring(st.x + 16, st.y + 16, '#ffd24a', 44);
+    flash(st.x + 16, st.y + 16, '#ffe27a', 70, 18);
+    toast(first ? '★ Étoile cachée trouvée !' : '★ Étoile (déjà dans ta collection)');
+  }
   if (msg.status !== prevWorldInfo.status && msg.status === 'timeup') { sfx('timeup'); shake(5); }
   if (msg.status !== prevWorldInfo.status && (msg.status === 'won' || msg.status === 'finished')) {
     sfx('win');
@@ -586,7 +597,12 @@ function reactToState(prev, msg) {
       const s = sprites.get(p.id);
       if (s) { sparks(s.tx + 12, s.ty + 4, p.color, 12, 4, 46); flash(s.tx + 12, s.ty + 10, p.color, 70, 18); }
     });
+    if (window.Progress && msg.res) {
+      const medal = window.Progress.onResult(msg.res, msg.status === 'finished', myId === hostId);
+      if (medal === 'gold' || medal === 'silver') setTimeout(() => sfx('medal'), 500);
+    }
   }
+  prevWorldInfo.sr = msg.sr || 0;
   prevWorldInfo.door = msg.door;
   prevWorldInfo.keys = msg.keys.length;
   prevWorldInfo.cps = msg.cps.length;
@@ -668,6 +684,7 @@ function applyState(msg) {
     proj: msg.proj, cps: msg.cps, cph: msg.cph || [], cd: msg.cd, deaths: msg.deaths,
     lk: msg.lk === undefined ? 1 : msg.lk, ld: msg.ld || 0, sy: msg.sy || 0, cy: msg.cy || [],
     jw: new Map(msg.p.map((q, i) => [q[0], (msg.jw || [])[i] || 0])), tl: msg.tl || 0, recvAt: performance.now(),
+    sr: msg.sr || 0, res: msg.res || null,
   };
   for (const [id, x, y, face] of msg.p) {
     let s = sprites.get(id);
@@ -846,6 +863,8 @@ function startLevel(msg) {
   level = {
     rows: msg.level, tile: T, keys, door, index: msg.index, total: msg.total, name: msg.name, hint: msg.hint, chapter,
     timer: msg.timer || 0,
+    gold: msg.gold || 0, silver: msg.silver || 0,
+    star: (L.stars && L.stars[0]) || null,
     theme: chapter.theme,
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
@@ -858,7 +877,7 @@ function startLevel(msg) {
   sprites.clear();
   parts.length = 0;
   springAnim.clear();
-  Object.assign(prevWorldInfo, { door: world.door, keys: 0, cps: 0, status: 'playing', deaths: 0 });
+  Object.assign(prevWorldInfo, { door: world.door, keys: 0, cps: 0, status: 'playing', deaths: 0, sr: 0 });
   setupCanvas();
   level.bg = window.Themes.makeBackground(level.theme, LW, LH, msg.index + 1, RES);
   level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, msg.index + 1, RES);
@@ -868,9 +887,12 @@ function startLevel(msg) {
   irisT = 0;
   shakeMag = 0;
   canvas.style.transform = '';
-  $('level-hint').textContent = level.hint + (level.timer ? `  ⏱ Niveau chronométré : ${spokenTime(level.timer)}.` : '');
+  level.hintShown = !HINT_HIDDEN;
+  if (window.Progress) { window.Progress.onStart(msg); window.Progress.hideResult(); }
+  updateHintLine();
   armed = 1;
   lastTl = -1;
+  updateTimer.lastTier = null;
   emotes.clear();
   updateRoleHint();
   updateTeamBar();
@@ -889,6 +911,22 @@ function startLevel(msg) {
   }
 }
 
+// Indice : masqué par défaut (le consulter compte comme une aide pour la médaille « sans indice »)
+const HINT_HIDDEN = true;
+function updateHintLine() {
+  if (!level) return;
+  const timerNote = level.timer ? `⏱ Niveau chronométré : ${spokenTime(level.timer)}.` : '';
+  $('level-hint').textContent = level.hintShown
+    ? `${level.hint}  ${timerNote}`
+    : `💡 Indice masqué : touche I ou bouton « Indice » (compte comme une aide).  ${timerNote}`;
+  $('btn-hint').style.display = level.hintShown ? 'none' : '';
+}
+function revealHint() {
+  if (!level || level.hintShown) return;
+  level.hintShown = true;
+  if (window.Progress) window.Progress.noteHelp();
+  updateHintLine();
+}
 function showChapterCard(ch) {
   const el = $('chapter-card');
   $('chapter-num').textContent = `Chapitre ${ch.index + 1}`;
@@ -912,11 +950,10 @@ function showChapterCard(ch) {
 function updateBanner() {
   const finished = world.status === 'finished';
   const timeup = world.status === 'timeup';
-  $('banner').textContent = timeup
-    ? 'Temps écoulé !\nOn recommence le niveau…'
-    : finished ? 'Bravo, vous avez terminé tous les niveaux !' : 'Niveau réussi !';
+  $('banner').textContent = 'Temps écoulé !\nOn recommence le niveau…';
   $('banner').classList.toggle('bad', timeup);
-  $('banner').classList.toggle('show', finished || timeup || world.status === 'won');
+  // « Niveau réussi » / « Terminé » : c'est l'écran de résultat (progress.js) qui s'en charge
+  $('banner').classList.toggle('show', timeup);
 }
 
 function updateHud() {
@@ -947,8 +984,17 @@ function updateTimer() {
   }
   const playing = world.status === 'playing';
   const tl = world.status === 'timeup' ? 0 : world.tl;
-  el.textContent = `⏱ ${fmtTime(tl)}`;
-  el.className = playing && tl <= 10 ? 'urgent' : playing && tl <= 30 ? 'warn' : '';
+  // médaille que l'on aurait en finissant maintenant : or, puis argent, puis bronze
+  const elapsed = level.timer - tl;
+  const tier = playing && window.Progress ? window.Progress.tier(elapsed) : null;
+  const icon = tier === 'gold' ? ' 🥇' : tier === 'silver' ? ' 🥈' : tier === 'bronze' ? ' 🥉' : '';
+  el.textContent = `⏱ ${fmtTime(tl)}${icon}`;
+  el.className = playing && tl <= 10 ? 'urgent' : playing && tl <= 30 ? 'warn' : (tier || '');
+  if (playing && tier !== updateTimer.lastTier) {
+    if (updateTimer.lastTier === 'gold' && tier === 'silver') toast('🥇 perdue… vise l’argent !');
+    else if (updateTimer.lastTier === 'silver' && tier === 'bronze') toast('🥈 perdue… finis en bronze !');
+    updateTimer.lastTier = tier;
+  }
   if (tl !== lastTl) {
     lastTl = tl;
     if (playing && tl <= 10 && tl > 0) window.Sfx.play('tick', 300);
@@ -1083,7 +1129,14 @@ function hideHelp() {
 $('help-close').onclick = hideHelp;
 $('help').addEventListener('mousedown', (e) => { if (e.target === $('help')) hideHelp(); });
 $('btn-help').addEventListener('mousedown', (e) => e.preventDefault());
-$('btn-help').onclick = () => (level ? showHelp() : null);
+// L'aide ouverte à la main pendant un niveau compte comme une aide (l'ouverture automatique de la 1re fois, non)
+function openHelpByHand() {
+  if (window.Progress && level && world && world.status === 'playing') window.Progress.noteHelp();
+  showHelp();
+}
+$('btn-help').onclick = () => (level ? openHelpByHand() : null);
+$('btn-hint').addEventListener('mousedown', (e) => e.preventDefault());
+$('btn-hint').onclick = () => revealHint();
 
 /* ---------- Choix de l'apparence ---------- */
 function drawSkinThumb(cv, id, color, t) {
@@ -1238,6 +1291,11 @@ function renderLobby() {
     });
     if (current) sel.value = current;
   }
+  // « Reprendre ma partie » (choisi au chargement de la page) : le niveau est présélectionné pour le chef de room
+  if (isHost && window.Progress && window.Progress.peekResume() !== null && sel.options.length) {
+    const r = window.Progress.takeResume();
+    if (r >= 0 && r < sel.options.length) sel.value = String(r);
+  }
   $('level-panel').style.display = isHost ? '' : 'none';
   $('btn-start').style.display = isHost ? '' : 'none';
   $('lobby-wait').style.display = isHost ? 'none' : '';
@@ -1340,7 +1398,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (!level) return;
   if (e.code === 'Escape' && $('help').classList.contains('show')) return hideHelp();
-  if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : showHelp();
+  if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : openHelpByHand();
+  if (e.code === 'KeyI' && !e.repeat) return revealHint();
   if (/^(Digit|Numpad)[1-3]$/.test(e.code) && !e.repeat) return armSlot(Number(e.code.slice(-1)));
   const emo = e.ctrlKey || e.metaKey || e.altKey ? -1 : EMOTES.findIndex((m) => m.key === String(e.key).toLowerCase());
   if (emo >= 0) { if (!e.repeat) sendEmote(emo); return; }
@@ -1621,6 +1680,36 @@ function drawKey(k, frame) {
   ctx.restore();
   const tw = (frame * 0.05 + k.x) % 1;
   if (tw < 0.5) sparkle4(cx + 9, cy - 13, 4.5 * Math.sin(tw * Math.PI * 2), '#fff7c0');
+}
+
+// Étoile cachée : facultative, une par niveau. Pâle si elle est déjà dans ta collection.
+function drawStar(s, frame, owned) {
+  const bob = Math.sin(frame * 0.06 + s.x) * 2.6;
+  const cx = s.x + 16;
+  const cy = s.y + 16 + bob;
+  const pulse = 1 + Math.sin(frame * 0.12) * 0.07;
+  ctx.save();
+  if (owned) ctx.globalAlpha = 0.5;
+  glowAt(cx, cy, 30 + Math.sin(frame * 0.1) * 4, '#ffe27a', owned ? 0.35 : 0.75);
+  ctx.translate(cx, cy);
+  ctx.rotate(Math.sin(frame * 0.04) * 0.18);
+  ctx.scale(pulse, pulse);
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? 13 : 5.6;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r); else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath();
+  ctx.lineJoin = 'round';
+  fillOut(vGrad(-13, 12, '#fff6b0', '#ffb62e'), 1.8);
+  ctx.fillStyle = 'rgba(255,255,255,.75)';
+  ctx.beginPath();
+  ctx.ellipse(-3, -4, 2.2, 1.2, -0.7, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+  const tw = (frame * 0.045 + s.x) % 1;
+  if (tw < 0.45 && !owned) sparkle4(cx + 12, cy - 12, 4.2 * Math.sin((tw / 0.45) * Math.PI), '#ffffff');
 }
 
 function drawDoor(d, T, isOpen, inside, total, frame) {
@@ -2792,6 +2881,7 @@ function draw() {
     const c = tileCenter(idx);
     lights.push({ x: c.x, y: c.y, r: 60, c: '#ff8a2a', a: 0.3 });
   });
+  if (level.cfg.dark && level.star && !world.sr) lights.push({ x: level.star.x + T / 2, y: level.star.y + T / 2, r: 40, c: '#ffe27a', a: 0.28 }); // l'étoile scintille dans le noir
 
   level.rows.forEach((row, ty) => {
     for (let tx = 0; tx < row.length; tx++) {
@@ -2839,6 +2929,7 @@ function draw() {
   level.keys.forEach((k, i) => {
     if (!world.keys.includes(i)) drawKey(k, frame);
   });
+  if (level.star && !world.sr) drawStar(level.star, frame, !!(window.Progress && window.Progress.hasStar(level.name)));
 
   // Progression d'une séquence de cristaux
   if (level.cfg.seqGroup) {
@@ -2957,6 +3048,14 @@ function draw() {
   }
 
   if (frame % 3 === 0) updateActionCooldowns();
+}
+
+if (window.Progress) {
+  window.Progress.setHooks({
+    toast,
+    replay: () => send({ t: 'restart' }), // écran de résultat : le chef rejoue le niveau
+    next: () => send({ t: 'skip' }), // ... ou passe à la suite
+  });
 }
 
 refreshPickers();
