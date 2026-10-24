@@ -21,7 +21,7 @@ const app = express();
 app.get('/physics.js', (req, res) => res.sendFile(path.join(__dirname, 'physics.js')));
 
 // Version du jeu : visible sur /diag pour vérifier que la mise à jour est bien en ligne
-const BUILD = 'v3 - 30 niveaux, médailles, records, étoiles';
+const BUILD = 'v3 - 30 niveaux, médailles, records, étoiles, sauvegarde en ligne';
 const fs = require('fs');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const WEB_FILES = ['index.html', 'client.js', 'progress.js', 'audio.js', 'skins.js', 'themes.js'];
@@ -48,6 +48,7 @@ app.get('/diag', (req, res) => {
     'Cordée - ' + BUILD,
     'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 30)',
     'Chapitres : ' + CHAPTERS.length + ' (attendu : 8)',
+    'Sauvegarde des records : ' + (storeMode === 'upstash' ? 'en ligne (Upstash) - durable' : storeMode === 'file' ? 'fichier local - effacé à chaque redémarrage sur Render' : 'mémoire - perdue au redémarrage') + ' (savedata.js : ' + size(path.join(__dirname, 'savedata.js')) + ')',
     '',
     'Fichiers dans public/ :',
     ...WEB_FILES.map((f) => '  ' + f + ' : ' + size(path.join(PUBLIC_DIR, f))),
@@ -69,6 +70,132 @@ app.get('/api/levels', (req, res) => {
     chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
   });
 });
+
+/* ---------- Sauvegarde en ligne des records / étoiles (« code d'équipe ») ----------
+   Le disque d'un serveur Render gratuit est effacé à chaque redémarrage : les données sont donc
+   gardées dans une base gratuite (Upstash Redis) si UPSTASH_REDIS_REST_URL et UPSTASH_REDIS_REST_TOKEN sont définis.
+   Sinon : un simple fichier (utile en local) ou, à défaut, la mémoire (perdue au redémarrage). */
+const SaveData = require('./savedata');
+const clean = (s) => String(s || '').trim().replace(/^["']+|["']+$/g, '');
+const UP_URL = clean(process.env.UPSTASH_REDIS_REST_URL).replace(/\/+$/, '');
+const UP_TOKEN = clean(process.env.UPSTASH_REDIS_REST_TOKEN);
+const DATA_FILE = process.env.CORDEE_DATA || path.join(__dirname, 'data', 'teams.json');
+
+const teamCache = new Map(); // clé -> sauvegarde (copie en mémoire : évite des lectures inutiles de la base)
+let fileDb = null;
+let storeMode = 'memory';
+
+async function upstash(cmd) {
+  const r = await fetch(UP_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${UP_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(cmd),
+    signal: AbortSignal.timeout(8000),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.error) throw new Error(j.error || `Upstash HTTP ${r.status}`);
+  return j.result;
+}
+function initStore() {
+  if (UP_URL && UP_TOKEN) { storeMode = 'upstash'; return; }
+  try {
+    fileDb = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) || {};
+    storeMode = 'file';
+  } catch (e) {
+    fileDb = {};
+    try { fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true }); fs.writeFileSync(DATA_FILE, '{}'); storeMode = 'file'; } catch { storeMode = 'memory'; }
+  }
+}
+initStore();
+let fileTimer = null;
+function saveFile() {
+  if (storeMode !== 'file' || fileTimer) return;
+  fileTimer = setTimeout(() => {
+    fileTimer = null;
+    try { fs.writeFileSync(DATA_FILE, JSON.stringify(fileDb)); } catch { /* ignore */ }
+  }, 500);
+}
+async function storeGet(key) {
+  if (teamCache.has(key)) return teamCache.get(key);
+  let raw = null;
+  if (storeMode === 'upstash') raw = await upstash(['GET', `cordee:team:${key}`]);
+  else if (fileDb) raw = fileDb[key] || null;
+  let data = SaveData.blank();
+  if (raw) { try { data = SaveData.sanitize(typeof raw === 'string' ? JSON.parse(raw) : raw); } catch { /* données illisibles : on repart de zéro */ } }
+  teamCache.set(key, data);
+  return data;
+}
+async function storeSet(key, data) {
+  const raw = JSON.stringify(data);
+  if (storeMode === 'upstash') await upstash(['SET', `cordee:team:${key}`, raw]);
+  else if (fileDb) { fileDb[key] = raw; saveFile(); }
+  teamCache.set(key, data);
+}
+// Un seul traitement à la fois par équipe (les deux joueurs peuvent envoyer en même temps)
+const teamLocks = new Map();
+function withLock(key, fn) {
+  const prev = teamLocks.get(key) || Promise.resolve();
+  const next = prev.catch(() => {}).then(fn);
+  teamLocks.set(key, next);
+  next.finally(() => { if (teamLocks.get(key) === next) teamLocks.delete(key); }).catch(() => {});
+  return next;
+}
+// Limite simple : 90 requêtes par minute et par adresse
+const rateHits = new Map();
+function rateOk(ip) {
+  const now = Date.now();
+  const h = (rateHits.get(ip) || []).filter((t) => now - t < 60000);
+  h.push(now);
+  rateHits.set(ip, h);
+  if (rateHits.size > 5000) rateHits.clear();
+  return h.length <= 90;
+}
+const teamKey = (code) => {
+  const k = String(code || '').trim().toLowerCase();
+  return /^[a-z0-9_-]{6,48}$/.test(k) ? k : null;
+};
+
+async function teamHandler(req, res) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  const reply = (status, obj) => { res.statusCode = status; res.end(JSON.stringify(obj)); };
+  const key = teamKey(req.params.code);
+  if (!key) return reply(400, { ok: false, error: 'Code d’équipe invalide (6 à 48 lettres, chiffres, - ou _).' });
+  if (!rateOk(req.ip || (req.socket && req.socket.remoteAddress) || '?')) return reply(429, { ok: false, error: 'Trop de requêtes, patientez un instant.' });
+  try {
+    const out = await withLock(key, async () => {
+      const cur = await storeGet(key);
+      if (req.method !== 'POST') return cur;
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const merged = SaveData.merge(cur, SaveData.sanitize(body.data));
+      if (!SaveData.same(merged, cur)) await storeSet(key, merged);
+      return merged;
+    });
+    reply(200, { ok: true, data: out, durable: storeMode === 'upstash' });
+  } catch (e) {
+    console.error('Sauvegarde équipe :', e.message);
+    reply(503, { ok: false, error: 'Base de sauvegarde indisponible.' });
+  }
+}
+app.get('/savedata.js', (req, res) => res.sendFile(path.join(__dirname, 'savedata.js')));
+app.get('/api/storage', (req, res) => res.json({ mode: storeMode, durable: storeMode === 'upstash' }));
+// Les navigateurs envoient la sauvegarde en JSON (sendBeacon compris) ; on la lit nous-mêmes pour accepter tous les types de contenu
+app.post('/api/team/:code', (req, res, next) => {
+  let size = 0;
+  const chunks = [];
+  req.on('data', (c) => {
+    size += c.length;
+    if (size > 65536) { req.destroy(); return; }
+    chunks.push(c);
+  });
+  req.on('end', () => {
+    try { req.body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { req.body = {}; }
+    next();
+  });
+  req.on('error', () => {});
+});
+app.get('/api/team/:code', teamHandler);
+app.post('/api/team/:code', teamHandler);
+if (process.env.CORDEE_TEST) global.__teamHandler = teamHandler;
 
 app.use(express.static(PUBLIC_DIR));
 const server = http.createServer(app);
@@ -524,6 +651,7 @@ function freshRoomState(room, index) {
   room.respawn = { ...room.level.spawn };
   room.deaths = 0;
   room.starTaken = false;
+  room.helped = false; // un des joueurs a consulté l'indice ou l'aide pendant ce niveau
   room.result = null;
   room.latch = {};
   room.crystalUntil = room.level.crystals.map(() => 0);
@@ -548,7 +676,7 @@ function loadLevel(room, index) {
 
 function finishLevel(room, skipped) {
   // résultat du niveau : le temps compte depuis le début (hors pauses), les chutes depuis le dernier redémarrage
-  room.result = { time: room.clock, deaths: room.deaths, star: room.starTaken, skipped: !!skipped };
+  room.result = { time: room.clock, deaths: room.deaths, star: room.starTaken, skipped: !!skipped, help: !!room.helped };
   room.timer = 900; // écran de résultat : 15 secondes (le chef peut passer plus vite)
   room.status = room.levelIndex >= LEVELS.length - 1 ? 'finished' : 'won';
 }
@@ -891,6 +1019,11 @@ wss.on('connection', (ws) => {
         const taken = [...room.players.values()].some((q) => q !== p && q.color === msg.color);
         if (COLORS.includes(msg.color) && !taken) p.color = msg.color;
         broadcast(room, lobbyMsg(room));
+        break;
+      }
+      case 'help': {
+        // un joueur a regardé l'indice : « sans indice » vaut pour tout le duo
+        if (room && room.status === 'playing') room.helped = true;
         break;
       }
       case 'ping': {

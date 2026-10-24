@@ -1,6 +1,7 @@
 // Progression : médailles, records, étoiles, écran de fin de niveau et reprise de partie.
-// Tout est enregistré dans le navigateur (localStorage) : les données restent là d'une session à l'autre,
-// tant que les données du site ne sont pas effacées. Un export / import (fichier) permet de les sauvegarder ailleurs.
+// Les données sont gardées dans le navigateur (localStorage) ET, si un « code d'équipe » est saisi, sur le serveur
+// (base gratuite Upstash) : on retrouve alors records, étoiles et niveau atteint d'une session à l'autre et d'un ordinateur à l'autre.
+// Un export / import (fichier) reste possible en secours.
 (function () {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -15,46 +16,147 @@
   const TITLES = [[0, 'Promeneur'], [3, 'Randonneur'], [8, 'Éclaireur'], [14, 'Grimpeur'], [20, 'Alpiniste'], [26, 'Maître de cordée'], [30, 'Étoile du Sommet']];
 
   /* ---------- Sauvegarde ---------- */
-  const blank = () => ({ v: 1, best: {}, stars: {}, furthest: -1 });
-  let data = blank();
-  function load() {
-    try {
-      const j = JSON.parse(localStorage.getItem(KEY));
-      if (j && j.v === 1) data = Object.assign(blank(), j, { best: j.best || {}, stars: j.stars || {} });
-    } catch { /* ignore */ }
-  }
-  function persist() {
+  const SD = window.SaveData;
+  const TEAM_KEY = 'cordee.team';
+  let data = SD.blank();
+  try {
+    const j = JSON.parse(localStorage.getItem(KEY));
+    if (j) data = SD.sanitize(j);
+  } catch { /* ignore */ }
+  function saveLocal() {
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignore */ }
   }
-  load();
+  function persist() {
+    saveLocal();
+    schedulePush();
+  }
+  function setFurthest(v) {
+    data.furthest = v;
+    data.fat = Date.now();
+  }
 
-  // Fusionne une sauvegarde importée avec la sauvegarde actuelle : on garde le meilleur des deux
-  function merge(o) {
-    if (!o || o.v !== 1 || typeof o !== 'object') return false;
-    Object.entries(o.best || {}).forEach(([name, b]) => {
-      if (!b || typeof b !== 'object') return;
-      const a = data.best[name];
-      if (!a) { data.best[name] = b; return; }
-      const t = [a.t, b.t].filter((x) => typeof x === 'number');
-      data.best[name] = {
-        t: t.length ? Math.min(...t) : null,
-        m: Math.max(a.m || 0, b.m || 0), nd: !!(a.nd || b.nd), nh: !!(a.nh || b.nh), p: !!(a.p || b.p),
-        n: (a.n || 0) + (b.n || 0), at: Math.max(a.at || 0, b.at || 0),
-      };
+  // Fusionne une sauvegarde (fichier importé, copie du serveur) avec la sauvegarde actuelle : on garde le meilleur des deux
+  function merge(o, quiet) {
+    if (!o || typeof o !== 'object' || o.v !== 1) return false;
+    const m = SD.merge(data, SD.sanitize(o));
+    const changed = !SD.same(m, data);
+    data = m;
+    if (changed) { if (quiet) saveLocal(); else persist(); }
+    return true;
+  }
+
+  /* ---------- Sauvegarde en ligne (code d'équipe) ---------- */
+  let team = '';
+  try { team = localStorage.getItem(TEAM_KEY) || ''; } catch { /* ignore */ }
+  const TEAM_RE = /^[a-z0-9_-]{6,48}$/;
+  // état : off (pas de code) | sync (en cours) | ok | error ; durable : la base du serveur est configurée
+  const net = { state: team ? 'sync' : 'off', durable: null, err: '', bad: '' };
+  let pushTimer = null;
+  let retryTimer = null;
+  let inflight = false;
+  let dirty = false;
+  let firstSync = !team; // la première synchronisation (réussie ou non) a eu lieu
+  function describeNet() {
+    const n = Object.keys(data.best).filter((k) => data.best[k].t != null).length;
+    const stars = Object.keys(data.stars).length;
+    if (net.bad) return { cls: 'bad', text: net.bad };
+    if (net.state === 'off') {
+      if (net.durable === false) return { cls: 'warn', text: 'Sauvegarde en ligne non activée sur ce serveur : vos données restent dans ce navigateur.' };
+      return { cls: '', text: 'Tapez le même code sur chaque ordinateur : records, étoiles et niveau atteint se retrouvent à chaque session.' };
+    }
+    if (net.state === 'sync') return { cls: '', text: `☁ Synchronisation du code « ${team} »…` };
+    if (net.state === 'error') return { cls: 'bad', text: `☁ ${net.err || 'Serveur indisponible.'} Vos données restent dans ce navigateur et seront envoyées dès que possible.` };
+    if (net.durable === false) return { cls: 'warn', text: `⚠ Code « ${team} » reconnu, mais le serveur n’a pas de base de données configurée : les données risquent d’être perdues au prochain redémarrage du serveur.` };
+    return { cls: 'ok', text: `☁ Sauvegarde en ligne active (« ${team} ») · ${n} niveau${n > 1 ? 'x' : ''} terminé${n > 1 ? 's' : ''}, ★ ${stars}.` };
+  }
+  function renderNet() {
+    const d = describeNet();
+    const st = $('team-status');
+    if (st) { st.className = `team-status ${d.cls}`; st.textContent = d.text; }
+    document.querySelectorAll('.sync-line').forEach((e) => {
+      e.className = `sync-line ${d.cls}`;
+      e.textContent = net.state === 'off' ? 'Sauvegarde : ce navigateur seulement' : net.state === 'ok' && net.durable !== false ? '☁ Sauvegarde en ligne active' : net.state === 'sync' ? '☁ Synchronisation…' : net.state === 'ok' ? '⚠ Base du serveur non configurée' : '☁ Hors ligne, envoi plus tard';
     });
-    Object.keys(o.stars || {}).forEach((n) => { data.stars[n] = 1; });
-    if (typeof o.furthest === 'number') data.furthest = Math.max(data.furthest, o.furthest);
-    persist();
+  }
+  function schedulePush() {
+    if (!team) return;
+    dirty = true;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(sync, 1200);
+  }
+  // Envoie notre copie au serveur, qui la fusionne avec la sienne et renvoie le résultat (même requête pour lire et écrire)
+  function sync() {
+    if (!team) { firstSync = true; tryAskResume(); return Promise.resolve(); }
+    if (inflight) { dirty = true; return Promise.resolve(); }
+    inflight = true;
+    dirty = false;
+    clearTimeout(retryTimer);
+    if (net.state !== 'ok') { net.state = 'sync'; renderNet(); }
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const to = setTimeout(() => ctl && ctl.abort(), 12000);
+    return fetch(`/api/team/${encodeURIComponent(team)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store',
+      body: JSON.stringify({ data }), signal: ctl ? ctl.signal : undefined,
+    })
+      .then((r) => r.json().catch(() => ({ ok: false })).then((j) => { if (!j.ok) throw new Error(j.error || 'Serveur indisponible.'); return j; }))
+      .then((j) => {
+        merge(j.data, true);
+        net.state = 'ok';
+        net.durable = !!j.durable;
+        renderAll();
+      })
+      .catch((e) => {
+        net.state = 'error';
+        net.err = e && e.name !== 'AbortError' && e.message && e.message !== 'Failed to fetch' ? e.message : 'Serveur injoignable.';
+        retryTimer = setTimeout(sync, 20000);
+      })
+      .finally(() => {
+        clearTimeout(to);
+        inflight = false;
+        firstSync = true;
+        renderNet();
+        if (dirty) schedulePush();
+        tryAskResume();
+      });
+  }
+  // À la fermeture de la fenêtre : dernier envoi (sendBeacon continue même quand la page se ferme)
+  function flush() {
+    if (!team || !dirty) return;
+    dirty = false;
+    try {
+      navigator.sendBeacon(`/api/team/${encodeURIComponent(team)}`, new Blob([JSON.stringify({ data })], { type: 'application/json' }));
+    } catch { /* ignore */ }
+  }
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+
+  function setTeam(raw) {
+    const code = String(raw || '').trim().toLowerCase();
+    if (code && !TEAM_RE.test(code)) {
+      net.bad = 'Code invalide : 6 à 48 caractères (lettres, chiffres, - ou _).';
+      renderNet();
+      return false;
+    }
+    net.bad = '';
+    team = code;
+    if ($('team-code')) $('team-code').value = code;
+    try { if (code) localStorage.setItem(TEAM_KEY, code); else localStorage.removeItem(TEAM_KEY); } catch { /* ignore */ }
+    net.err = '';
+    net.state = code ? 'sync' : 'off';
+    clearTimeout(retryTimer);
+    renderNet();
+    if (code) { dirty = true; sync(); } else renderAll();
     return true;
   }
 
   /* ---------- Catalogue des niveaux (noms, chapitres, seuils de médailles) ---------- */
   let catalog = { levels: [], chapters: [] };
+  let catalogOk = false;
   let cur = null; // niveau en cours : { index, name, gold, silver, timer, star, help }
   function fetchCatalog() {
     fetch('/api/levels', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((j) => { catalog = j; renderAll(); askResume(); })
+      .then((j) => { catalog = j; catalogOk = true; renderAll(); tryAskResume(); })
       .catch(() => { setTimeout(fetchCatalog, 4000); });
   }
 
@@ -95,6 +197,7 @@
     head.append(el('div', 'sum-medals', `🥇 ${cnt[3]}   🥈 ${cnt[2]}   🥉 ${cnt[1]}`));
     head.append(el('div', 'sum-line', `${done.length}/${lv.length} niveaux terminés${done.length ? ` · temps cumulé ${fmt(total, true)}` : ''}`));
     root.append(head);
+    root.append(el('div', 'sync-line'));
     let lastCh = -1;
     let box = null;
     lv.forEach((l, i) => {
@@ -139,6 +242,7 @@
     head.append(bar);
     head.append(el('div', 'sum-line', `Titre : ${titleFor(n)}`));
     root.append(head);
+    root.append(el('div', 'sync-line'));
     root.append(el('p', 'side-legend', 'Chaque niveau cache une étoile, hors du chemin. Elle compte dès que tu la touches.'));
     let lastCh = -1;
     let box = null;
@@ -184,6 +288,7 @@
     rd.onload = () => {
       let ok = false;
       try { ok = merge(JSON.parse(String(rd.result))); } catch { ok = false; }
+      if (ok) sync();
       renderAll();
       hooks.toast(ok ? 'Sauvegarde importée !' : 'Fichier de sauvegarde invalide.');
     };
@@ -197,6 +302,7 @@
       renderRecords($('modal-records'));
       renderStars($('modal-stars'));
     }
+    renderNet();
   }
 
   /* ---------- Fenêtre « Records / Étoiles » (écrans étroits) ---------- */
@@ -205,6 +311,7 @@
     renderStars($('modal-stars'));
     $('panel-modal').classList.add('show');
     showTab(tab || 'records');
+    renderNet();
   }
   function showTab(tab) {
     $('modal-records').style.display = tab === 'records' ? '' : 'none';
@@ -223,12 +330,18 @@
   /* ---------- Reprise de partie ---------- */
   let askedResume = false;
   let pendingResume = null;
+  // On propose de reprendre une fois le catalogue chargé ET la sauvegarde en ligne lue, et seulement depuis le menu
+  function tryAskResume() {
+    if (!catalogOk || !firstSync || askedResume || pendingResume !== null) return;
+    const menu = $('screen-menu');
+    if (menu && !menu.classList.contains('active')) return;
+    askResume();
+  }
   function askResume() {
-    if (askedResume) return;
-    askedResume = true;
     if (data.furthest < 1) return;
     const l = catalog.levels[data.furthest];
-    if (!l) { askedResume = false; return; }
+    if (!l) return;
+    askedResume = true;
     const chap = (catalog.chapters[l.chapter] || {}).name || '';
     $('resume-text').textContent = `Dernier niveau atteint : ${data.furthest + 1}. ${l.name} (${chap}).`;
     $('btn-resume-yes').textContent = `Reprendre au niveau ${data.furthest + 1}`;
@@ -240,7 +353,7 @@
     hooks.toast(`Reprise : le niveau ${pendingResume + 1} sera présélectionné dans le salon.`);
   };
   $('btn-resume-no').onclick = () => {
-    data.furthest = -1; // on ne veut pas reprendre : la sauvegarde de progression est supprimée (records et étoiles restent)
+    setFurthest(-1); // on ne veut pas reprendre : la sauvegarde de progression est supprimée (records et étoiles restent)
     persist();
     pendingResume = null;
     $('resume').classList.remove('show');
@@ -265,7 +378,7 @@
     if (!skipped && l) {
       medal = medalFor(sec, l.gold, l.silver);
       const noDeath = res.deaths === 0;
-      const noHelp = !l.help;
+      const noHelp = !l.help && !res.help; // l'indice consulté par l'un des joueurs compte pour tout le duo
       const b = data.best[l.name];
       const prev = b && b.t != null ? b.t : null;
       const newBest = prev === null || sec < prev - 0.001;
@@ -280,7 +393,7 @@
       persist();
       info = { prev, newBest, noDeath, noHelp };
     }
-    if (finished) { data.furthest = -1; persist(); } // partie terminée : plus rien à reprendre
+    if (finished) { setFurthest(-1); persist(); } // partie terminée : plus rien à reprendre
     renderAll();
 
     $('res-title').textContent = finished ? 'Bravo, vous avez terminé tous les niveaux !' : skipped ? 'Niveau passé' : 'Niveau réussi !';
@@ -339,18 +452,22 @@
   $('res-next').onclick = () => hooks.next();
 
   /* ---------- Interface pour client.js ---------- */
-  const hooks = { toast() {}, replay() {}, next() {} };
+  const hooks = { toast() {}, replay() {}, next() {}, help() {} };
   window.Progress = {
     setHooks(h) { Object.assign(hooks, h); },
     fmt,
     // Début (ou redémarrage) d'un niveau
     onStart(msg) {
       cur = { index: msg.index, name: msg.name, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false };
-      if (msg.index > data.furthest) { data.furthest = msg.index; persist(); }
+      if (msg.index > data.furthest) { setFurthest(msg.index); persist(); }
       hideResult();
       renderAll();
     },
-    noteHelp() { if (cur) cur.help = true; },
+    noteHelp() {
+      if (!cur || cur.help) return;
+      cur.help = true;
+      hooks.help();
+    },
     hasHelp: () => !!(cur && cur.help),
     // Médaille que l'on aurait en finissant maintenant (temps écoulé en secondes)
     tier(elapsed) {
@@ -374,6 +491,22 @@
     peekResume: () => pendingResume,
   };
 
+  /* ---------- Champ « code d'équipe » du menu ---------- */
+  const teamInput = $('team-code');
+  if (teamInput) {
+    teamInput.value = team;
+    const validate = () => { if (teamInput.value.trim().toLowerCase() !== team) setTeam(teamInput.value); };
+    $('team-save').onclick = () => { if (!setTeam(teamInput.value)) return; if (team) sync(); };
+    teamInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); validate(); } e.stopPropagation(); });
+    teamInput.addEventListener('keyup', (e) => e.stopPropagation());
+    teamInput.addEventListener('change', validate);
+  }
+  fetch('/api/storage', { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((j) => { if (net.durable === null) net.durable = !!j.durable; renderNet(); })
+    .catch(() => {});
+
   fetchCatalog();
   renderAll();
+  sync();
 })();

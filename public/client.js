@@ -3055,6 +3055,7 @@ if (window.Progress) {
     toast,
     replay: () => send({ t: 'restart' }), // écran de résultat : le chef rejoue le niveau
     next: () => send({ t: 'skip' }), // ... ou passe à la suite
+    help: () => send({ t: 'help' }), // l'indice consulté par un joueur compte pour tout le duo
   });
 }
 
