@@ -9,7 +9,10 @@
   const MAX_LEVELS = 200;
   const MAX_NAME = 60;
 
-  const blank = () => ({ v: 1, best: {}, stars: {}, furthest: -1, fat: 0 });
+  const blank = () => ({ v: 1, best: {}, stars: {}, furthest: -1, fat: 0, stats: { days: {}, fails: {} } });
+  const MAX_DAYS = 500;
+  const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+  const sorted = (o) => Object.keys(o).sort().reduce((r, k) => { r[k] = o[k]; return r; }, {});
   const int = (x, lo, hi, def) => {
     const n = Math.round(Number(x));
     return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : def;
@@ -28,7 +31,7 @@
       const t = Number(b.t);
       out.best[name] = {
         t: Number.isFinite(t) && t > 0 && t < 100000 ? Math.round(t * 10) / 10 : null,
-        m: int(b.m, 0, 3, 0),
+        m: int(b.m, 0, 4, 0),
         nd: !!b.nd,
         nh: !!b.nh,
         p: !!b.p,
@@ -44,6 +47,25 @@
     });
     out.furthest = int(o.furthest, -1, MAX_LEVELS, -1);
     out.fat = int(o.fat, 0, 8.64e15, 0);
+    // Statistiques : s = secondes jouées ce jour-là, d = chutes ; fails = chutes par niveau
+    const st = o.stats && typeof o.stats === 'object' ? o.stats : {};
+    const days = st.days && typeof st.days === 'object' ? st.days : {};
+    count = 0;
+    Object.keys(days).sort().reverse().forEach((k) => {
+      const d = days[k];
+      if (!DAY_RE.test(k) || !d || typeof d !== 'object' || count >= MAX_DAYS) return;
+      count++;
+      out.stats.days[k] = { s: int(d.s, 0, 86400, 0), d: int(d.d, 0, 1e5, 0) };
+    });
+    out.stats.days = sorted(out.stats.days);
+    const fails = st.fails && typeof st.fails === 'object' ? st.fails : {};
+    count = 0;
+    Object.keys(fails).forEach((k) => {
+      if (!okName(k) || count >= MAX_LEVELS) return;
+      count++;
+      out.stats.fails[k] = int(fails[k], 0, 1e6, 0);
+    });
+    out.stats.fails = sorted(out.stats.fails);
     return out;
   }
 
@@ -66,6 +88,14 @@
         at: Math.max(x.at, y.at),
       };
     });
+    // Statistiques : le plus grand des deux (les deux joueurs enregistrent la même partie, on ne la compte qu'une fois)
+    const mx = (x, y, f) => {
+      const r = {};
+      new Set([...Object.keys(x), ...Object.keys(y)]).forEach((k) => { r[k] = f(x[k], y[k]); });
+      return sorted(r);
+    };
+    out.stats.days = mx(a.stats.days, b.stats.days, (p, q) => (p && q ? { s: Math.max(p.s, q.s), d: Math.max(p.d, q.d) } : Object.assign({}, p || q)));
+    out.stats.fails = mx(a.stats.fails, b.stats.fails, (p, q) => Math.max(p || 0, q || 0));
     Object.keys(a.stars).forEach((n) => { out.stars[n] = 1; });
     Object.keys(b.stars).forEach((n) => { out.stars[n] = 1; });
     // « Niveau atteint » : c'est la modification la plus récente qui gagne (permet aussi de l'effacer)

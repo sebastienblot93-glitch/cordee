@@ -528,7 +528,9 @@ LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] 
 // Médailles : temps (en secondes, depuis le début du niveau) à ne pas dépasser.
 //   or      : temps ≤ ratio d'or × minuteur      argent : temps ≤ ratio d'argent × minuteur      bronze : niveau réussi
 // Un ratio par chapitre : les premiers chapitres sont plus exigeants (on y va vite), le dernier plus généreux (minuteurs déjà serrés).
-// Pour régler un niveau à la main : MEDALS = { 'Nom du niveau': [secondes pour l\u2019or, secondes pour l\u2019argent] }
+// Diamant : le palier ultime, un temps de coordination parfaite (environ 58 % du temps d'or, déduit des parcours des bots
+// de test auxquels on laisse de la marge : un humain ne rejoue pas un bot).
+// Pour régler un niveau à la main : MEDALS = { 'Nom du niveau': [secondes pour l\u2019or, secondes pour l\u2019argent, secondes pour le diamant (facultatif)] }
 const GOLD_RATIOS = [0.4, 0.45, 0.45, 0.5, 0.5, 0.5, 0.5, 0.55];
 const SILVER_RATIOS = [0.65, 0.7, 0.7, 0.75, 0.75, 0.75, 0.75, 0.8];
 const MEDALS = {};
@@ -539,6 +541,7 @@ LEVELS.forEach((l) => {
   const t = l.timer || 90;
   l.gold = m ? m[0] : Math.max(10, Math.round(t * g));
   l.silver = m ? m[1] : Math.max(l.gold + 5, Math.round(t * sv));
+  l.diamond = m && m[2] ? m[2] : Math.max(6, Math.min(l.gold - 3, Math.round(l.gold * 0.58)));
 });
 
 module.exports = { LEVELS, CHAPTERS };
