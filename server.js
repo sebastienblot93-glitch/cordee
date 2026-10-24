@@ -5,7 +5,7 @@ const { WebSocketServer } = require('ws');
 const { LEVELS, CHAPTERS } = require('./levels');
 const {
   TILE, PW, PH, SPELL, ICE_PAD, COOP, parseLevel, hitsTile, gatesTouching, newPlayerState, stepPlayer,
-  touchesRect, hitsSpikes, launchProjectile, stepProjectile, resolvePlayers, unstick, woodCluster,
+  touchesRect, hitsSpikes, tileSolid, launchProjectile, stepProjectile, resolvePlayers, unstick, woodCluster,
 } = require('./physics');
 
 const PORT = process.env.PORT || 3000;
@@ -21,7 +21,7 @@ const app = express();
 app.get('/physics.js', (req, res) => res.sendFile(path.join(__dirname, 'physics.js')));
 
 // Version du jeu : visible sur /diag pour vérifier que la mise à jour est bien en ligne
-const BUILD = 'v3 - 30 niveaux, médailles, records, étoiles, sauvegarde en ligne';
+const BUILD = 'v3 - 34 niveaux, boss final, médailles, records, étoiles, sauvegarde en ligne';
 const fs = require('fs');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const WEB_FILES = ['index.html', 'client.js', 'progress.js', 'audio.js', 'skins.js', 'themes.js'];
@@ -46,8 +46,8 @@ app.get('/diag', async (req, res) => {
   const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
   const lines = [
     'Cordée - ' + BUILD,
-    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 30)',
-    'Chapitres : ' + CHAPTERS.length + ' (attendu : 8)',
+    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 34)',
+    'Chapitres : ' + CHAPTERS.length + ' (attendu : 9)',
     'Sauvegarde des records : ' + (storeMode === 'upstash' ? 'en ligne (Upstash) - durable' : storeMode === 'file' ? 'fichier local - effacé à chaque redémarrage sur Render' : 'mémoire - perdue au redémarrage') + ' (savedata.js : ' + size(path.join(__dirname, 'savedata.js')) + ')',
     ...(storeMode === 'upstash' ? await upstashDiag() : []),
     '',
@@ -275,6 +275,7 @@ const wss = new WebSocketServer({ server });
 
 const rooms = new Map(); // code -> room
 if (process.env.CORDEE_TEST) global.__rooms = rooms; // uniquement pour les tests automatiques
+if (process.env.CORDEE_TEST) global.__tick = (room) => tick(room); // idem : permet d'avancer la simulation pas à pas
 
 /* ---------- Monde : volets, plaques, cristaux, cibles, portes ---------- */
 function holdFor(L, group) {
@@ -485,7 +486,7 @@ function collectStars(room, list) {
 }
 
 function doorOpen(room) {
-  return room.keysTaken.size >= room.level.keys.length;
+  return room.keysTaken.size >= room.level.keys.length && (!room.boss || room.boss.dead);
 }
 
 function allInDoor(room, list) {
@@ -530,6 +531,193 @@ function hazardsAndCheckpoints(room, list) {
   });
 }
 
+
+/* ---------- Le boss (dernier niveau) ---------- */
+// Le bouclier du boss tombe quand le groupe 1 est actif : le cristal du Mage ET la cible de l'Archer en même temps.
+// Il reste baissé quelques secondes (fenêtre de tir), puis remonte et se recharge un moment : il faut alors retoucher
+// cristal et cible (on peut le faire d'avance) sans cesser d'esquiver.
+// Trois phases (à 66 % et 33 % de vie) : attaques plus rapprochées, plus nombreuses, plus vives. Chaque attaque est annoncée.
+const BOSS_PHASE = {
+  1: { gap: 170, rocks: 3, warn: 78, ball: 2.6, wave: 2.8, down: 300, cool: 170 },
+  2: { gap: 120, rocks: 4, warn: 62, ball: 3.2, wave: 3.5, down: 270, cool: 140 },
+  3: { gap: 88, rocks: 5, warn: 50, ball: 3.8, wave: 4.2, down: 240, cool: 110 },
+};
+const BOSS_DMG = { orb: 1, arrow: 1, fire: 2 };
+const HURT_INV = 100; // ticks d'invincibilité après un coup (un joueur touché clignote)
+const WAVE_H = 22;
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+function newBoss(c) {
+  return { cx: c.cx, cy: c.cy, x: c.cx, y: c.cy, hp: c.hp, max: c.hp, hearts: c.hearts, phase: 1, resumed: 0, dead: false, shield: 'cool', until: 150,
+    next: 200, last: '', hz: [], flash: 0, pause: 0, t: 0 };
+}
+const bossExposed = (room) => !!room.boss && !room.boss.dead && room.boss.pause <= 0 && room.boss.shield === 'down';
+
+function hurtPlayer(room, p) {
+  const t = room.time;
+  if ((p.hurtUntil || 0) > t || room.status !== 'playing') return;
+  p.hurtUntil = t + HURT_INV;
+  p.vy = -7;
+  room.hearts--;
+  room.deaths++; // un coup compte comme une chute : « sans chute » = combat sans aucun dégât
+  room.events.push(['hurt', Math.round(p.x), Math.round(p.y)]);
+  if (room.hearts <= 0) {
+    room.hearts = 0;
+    room.status = 'bossdown';
+    room.timer = 210;
+    room.bossResume = room.boss.phase;
+    room.carryClock = (room.carryClock || 0) + room.clock; // le temps des tentatives précédentes compte pour la médaille
+    room.bossResumeLevel = room.levelIndex;
+    room.boss.hz = [];
+  }
+}
+
+function launchAttack(room, list, kind) {
+  const B = room.boss;
+  const L = room.level;
+  const ph = BOSS_PHASE[B.phase];
+  const W = L.w * TILE;
+  const alive = list.length ? list : [{ x: W / 2, y: 0 }];
+  if (kind === 'rain') {
+    const xs = [alive[Math.floor(Math.random() * alive.length)].x + PW / 2];
+    for (let k = 0, tries = 0; k < ph.rocks - 1 && tries < 60; tries++) {
+      const x = rnd(TILE * 1.5, W - TILE * 1.5);
+      if (xs.every((o) => Math.abs(o - x) > 62)) { xs.push(x); k++; }
+    }
+    xs.forEach((x, i) => B.hz.push({ k: 'r', x: Math.round(x), y: -20, warn: ph.warn + i * 4, vy: 0 }));
+  } else if (kind === 'wave') {
+    const dirs = B.phase === 1 ? [Math.random() < 0.5 ? 1 : -1] : [1, -1];
+    const fromWalls = B.phase === 3;
+    dirs.forEach((d) => B.hz.push({ k: 'w', x: fromWalls ? (d > 0 ? TILE : W - TILE) : W / 2, dir: fromWalls ? d : d, warn: 48, vx: ph.wave }));
+    if (B.phase === 3) dirs.forEach((d) => B.hz.push({ k: 'w', x: d > 0 ? TILE : W - TILE, dir: d, warn: 48 + 46, vx: ph.wave }));
+  } else if (kind === 'ball') {
+    const n = B.phase === 1 ? 1 : B.phase === 2 ? 2 : 3;
+    for (let i = 0; i < n; i++) {
+      const tgt = alive[(i + Math.floor(Math.random() * 2)) % alive.length];
+      B.hz.push({ k: 'b', x: B.x, y: B.y + 22, warn: 44 + i * 16, tx: tgt.x + PW / 2, ty: tgt.y + PH / 2, vx: 0, vy: 0, spd: ph.ball, who: tgt });
+    }
+  }
+}
+
+function stepBoss(room, list) {
+  const B = room.boss;
+  const L = room.level;
+  if (!B || room.status !== 'playing') return;
+  const W = L.w * TILE;
+  B.t++;
+  if (B.dead) { B.hz = []; return; }
+  if (B.flash > 0) B.flash--;
+  B.x = B.cx + Math.sin(B.t * 0.011) * (60 + B.phase * 40);
+  B.y = B.cy + Math.sin(B.t * 0.023) * 12;
+  const ratio = B.hp / B.max;
+  const want = ratio > 0.66 ? 1 : ratio > 0.33 ? 2 : 3;
+  if (want > B.phase) { // changement de phase : le boss rugit, tout s'arrête un instant, l'équipe reprend 2 cœurs
+    B.phase = want;
+    B.hz = [];
+    B.pause = 140;
+    B.next = B.t + 210;
+    B.shield = 'cool';
+    B.until = B.t + 140 + 60;
+    room.crystalUntil.fill(0);
+    room.targetUntil.fill(0);
+    room.hearts = Math.min(B.hearts, room.hearts + 2);
+    room.events.push(['bphase', Math.round(B.x), Math.round(B.y)]);
+  }
+  if (B.pause > 0) { B.pause--; return; }
+  const ph = BOSS_PHASE[B.phase];
+  if (B.shield === 'up' && L.open.has(1)) {
+    B.shield = 'down';
+    B.until = B.t + ph.down;
+    room.events.push(['sdown', Math.round(B.x), Math.round(B.y)]);
+  } else if (B.shield === 'down' && B.t >= B.until) {
+    B.shield = 'cool';
+    B.until = B.t + ph.cool;
+    room.crystalUntil.fill(0);
+    room.targetUntil.fill(0);
+    room.events.push(['sup', Math.round(B.x), Math.round(B.y)]);
+  } else if (B.shield === 'cool' && B.t >= B.until) {
+    B.shield = 'up';
+  }
+  if (B.t >= B.next) {
+    const kinds = ['rain', 'ball', 'wave'].filter((k) => k !== B.last);
+    const k = kinds[Math.floor(Math.random() * kinds.length)];
+    B.last = k;
+    launchAttack(room, list, k);
+    if (B.phase === 3 && Math.random() < 0.4) launchAttack(room, list, kinds.find((x) => x !== k) || 'rain');
+    B.next = B.t + ph.gap + Math.floor(rnd(0, 30));
+  }
+  const floorY = (L.h - 1) * TILE;
+  B.hz = B.hz.filter((h) => {
+    if (h.k === 'r') {
+      if (h.warn > 0) { h.warn--; if (h.warn === 0) h.y = -20; return true; }
+      h.y += 13;
+      for (const p of list) if (p.x < h.x + 13 && p.x + PW > h.x - 13 && p.y < h.y + 13 && p.y + PH > h.y - 13) hurtPlayer(room, p);
+      if (h.y >= floorY - 10) { room.events.push(['rock', Math.round(h.x), floorY]); return false; }
+      return true;
+    }
+    if (h.k === 'w') {
+      if (h.warn > 0) { h.warn--; return true; }
+      h.x += h.dir * h.vx;
+      for (const p of list) if (p.x < h.x + 10 && p.x + PW > h.x - 10 && p.y + PH > floorY - WAVE_H && p.y < floorY) hurtPlayer(room, p);
+      return h.x > TILE - 4 && h.x < W - TILE + 4;
+    }
+    if (h.k === 'b') {
+      if (h.warn > 0) {
+        h.warn--;
+        h.x = B.x; h.y = B.y + 22;
+        if (h.warn > 12 && h.who) { h.tx = h.who.x + PW / 2; h.ty = h.who.y + PH / 2; } // suit sa cible, puis se verrouille
+        if (h.warn === 0) {
+          const dx = h.tx - h.x;
+          const dy = h.ty - h.y;
+          const d = Math.hypot(dx, dy) || 1;
+          h.vx = (dx / d) * h.spd;
+          h.vy = (dy / d) * h.spd;
+          h.who = null;
+        }
+        return true;
+      }
+      h.x += h.vx;
+      h.y += h.vy;
+      for (const p of list) if (p.x < h.x + 9 && p.x + PW > h.x - 9 && p.y < h.y + 9 && p.y + PH > h.y - 9) { hurtPlayer(room, p); return false; }
+      if (h.x < 0 || h.x > W || h.y < -40 || h.y > L.h * TILE || tileSolid(L, Math.floor(h.x / TILE), Math.floor(h.y / TILE))) {
+        room.events.push(['ballpop', Math.round(h.x), Math.round(h.y)]);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  });
+}
+
+// Un tir du joueur touche-t-il le boss (bouclier tombé : dégâts) ou une boule de feu (elle s'éteint) ?
+function bossHit(room, pr) {
+  const B = room.boss;
+  if (!B || B.dead || pr.kind === 'swap' || room.status !== 'playing') return false;
+  for (const h of B.hz) {
+    if (h.k === 'b' && h.warn <= 0 && Math.hypot(pr.x - h.x, pr.y - h.y) < 17) {
+      B.hz.splice(B.hz.indexOf(h), 1);
+      room.events.push(['ballpop', Math.round(h.x), Math.round(h.y)]);
+      return true;
+    }
+  }
+  if (Math.hypot(pr.x - B.x, pr.y - B.y) < 40) {
+    if (bossExposed(room)) {
+      B.hp = Math.max(0, B.hp - (BOSS_DMG[pr.kind] || 1));
+      B.flash = 10;
+      room.events.push(['bhit', Math.round(pr.x), Math.round(pr.y)]);
+      if (B.hp <= 0) {
+        B.dead = true;
+        B.hz = [];
+        room.events.push(['bdie', Math.round(B.x), Math.round(B.y)]);
+      }
+    } else {
+      room.events.push(['bblock', Math.round(pr.x), Math.round(pr.y)]);
+    }
+    return true;
+  }
+  return false;
+}
+
 /* ---------- Sorts et tirs ---------- */
 function cast(room, p, slot, ax, ay) {
   const L = room.level;
@@ -572,6 +760,7 @@ function stepProjectiles(room) {
   const L = room.level;
   room.projectiles = room.projectiles.filter((pr) => {
     const ev = stepProjectile(L, pr);
+    if (!ev && room.boss && bossHit(room, pr)) return false;
     if (!ev) {
       if (pr.kind === 'swap' && trySwap(room, pr)) return false;
       return true;
@@ -636,6 +825,7 @@ function resetPlayers(room) {
     p.carriedBy = null;
     p.grabCd = 0;
     p.jumpAt = -999;
+    p.hurtUntil = 0;
     i++;
   }
 }
@@ -703,6 +893,7 @@ function startMsg(room) {
       sync: !!def.sync,
       carry: !!def.carry,
       heavy: def.heavy || [],
+      boss: def.boss ? { hp: def.boss.hp, hearts: def.boss.hearts, name: def.boss.name } : null,
     },
   };
 }
@@ -734,6 +925,17 @@ function freshRoomState(room, index) {
   room.linkOn = true;
   room.linkDist = 0;
   room.syncUntil = 0;
+  room.boss = def.boss ? newBoss(def.boss) : null;
+  room.hearts = def.boss ? def.boss.hearts : 0;
+  // Après une défaite, on reprend au début de la phase atteinte (le boss garde les points de vie de ce palier)
+  if (room.boss && room.bossResume > 1 && room.bossResumeLevel === index) {
+    room.boss.hp = Math.ceil(room.boss.max * (room.bossResume === 2 ? 0.66 : 0.33));
+    if (room.boss.hp / room.boss.max > (room.bossResume === 2 ? 0.66 : 0.33)) room.boss.hp--;
+    room.boss.resumed = room.bossResume;
+  } else {
+    room.carryClock = 0;
+  }
+  room.bossResume = 0;
 }
 
 function loadLevel(room, index) {
@@ -747,7 +949,7 @@ function loadLevel(room, index) {
 
 function finishLevel(room, skipped) {
   // résultat du niveau : le temps compte depuis le début (hors pauses), les chutes depuis le dernier redémarrage
-  room.result = { time: room.clock, deaths: room.deaths, star: room.starTaken, skipped: !!skipped, help: !!room.helped };
+  room.result = { time: room.clock + (room.boss ? room.carryClock || 0 : 0), deaths: room.deaths, star: room.starTaken, skipped: !!skipped, help: !!room.helped };
   room.timer = 900; // écran de résultat : 15 secondes (le chef peut passer plus vite)
   room.status = room.levelIndex >= LEVELS.length - 1 ? 'finished' : 'won';
 }
@@ -798,6 +1000,15 @@ function stateMsg(room, list) {
     sy: Math.max(0, room.syncUntil - t), // ticks restants des ponts synchro
     jw: list.map((p) => Math.max(0, COOP.syncWindow - (t - p.jumpAt))), // fenêtre de saut synchro encore ouverte
     cy: list.filter((p) => p.carriedBy).map((p) => [p.carriedBy, p.id]),
+    bs: room.boss ? {
+      x: Math.round(room.boss.x), y: Math.round(room.boss.y), hp: room.boss.hp, ph: room.boss.phase, dd: room.boss.dead ? 1 : 0,
+      rs: room.boss.resumed, ex: bossExposed(room) ? 1 : 0, sr: room.boss.shield === 'cool' ? 1 : 0, ut: Math.max(0, room.boss.until - room.boss.t), fl: room.boss.flash, ps: room.boss.pause,
+      hz: room.boss.hz.map((h) => (h.k === 'r' ? ['r', h.x, Math.round(h.y), h.warn]
+        : h.k === 'w' ? ['w', Math.round(h.x), h.dir, h.warn, h.vx]
+        : ['b', Math.round(h.x * 10) / 10, Math.round(h.y * 10) / 10, h.warn, Math.round(h.vx * 100) / 100, Math.round(h.vy * 100) / 100, Math.round(h.tx), Math.round(h.ty)])),
+    } : undefined,
+    hc: room.boss ? [room.hearts, room.boss.hearts] : undefined,
+    iv: room.boss ? list.filter((p) => (p.hurtUntil || 0) > t).map((p) => p.id) : undefined,
     deaths: room.deaths,
     tl: room.limit ? Math.max(0, Math.ceil((room.limit - room.clock) / 60)) : 0, // secondes restantes
   };
@@ -840,6 +1051,7 @@ function tick(room) {
   collectStars(room, list);
   hazardsAndCheckpoints(room, list);
   stepProjectiles(room);
+  stepBoss(room, list);
   stepBurn(room);
   expireIce(room);
 
@@ -858,7 +1070,7 @@ function tick(room) {
       room.status = 'timeup'; // temps écoulé : on laisse lire le message puis le niveau redémarre
       room.timer = 180; // 3 secondes
     }
-  } else if (room.status === 'timeup') {
+  } else if (room.status === 'timeup' || room.status === 'bossdown') {
     if (--room.timer <= 0) return loadLevel(room, room.levelIndex);
   } else if (room.status === 'won') {
     if (--room.timer <= 0) return loadLevel(room, room.levelIndex + 1);
@@ -881,7 +1093,7 @@ function tick(room) {
 const STEP_MS = 1000 / 60;
 let stepAcc = 0;
 let stepPrev = performance.now();
-setInterval(() => {
+if (!process.env.CORDEE_MANUAL) setInterval(() => {
   const now = performance.now();
   stepAcc += Math.min(now - stepPrev, 100); // si le serveur a été gelé, on ne rattrape pas plus de 100 ms
   stepPrev = now;
@@ -1074,6 +1286,7 @@ wss.on('connection', (ws) => {
         if (room.status === 'won' || room.status === 'finished') { // depuis l'écran de résultat : le chef rejoue le niveau
           if (room.hostId !== ws.id) return;
         } else if (room.status !== 'playing') return;
+        room.bossResume = 0;
         loadLevel(room, room.levelIndex);
         break;
       }

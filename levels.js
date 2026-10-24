@@ -490,6 +490,91 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, fire: true, link: true, sync: true, heavy: [1], and: [1], hold: { 1: 360 }, latch: { 1: 240 } }),
 
+  /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
+  make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
+    put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
+    rect(3, 1, 1, 13, 't'); // mur de bois (flèche de feu)
+    rect(6, 14, 10, 1, '^'); // douves A : pics de x=6 à x=15 (trop large pour le Mage)
+    put(8, 13, 'r'); // runes : pont de glace
+    put(10, 13, 'r');
+    put(12, 13, 'r');
+    put(16, 13, 'C'); // checkpoint de l'îlot
+    put(16, 6, 'x'); // cristal du Mage
+    put(17, 4, 'o'); // cible de l'Archer
+    put(16, 9, 'f'); // torche de l'Archer
+    rect(18, 1, 1, 13, 'a'); // grille de l'îlot
+    rect(20, 10, 2, 1); // corniche de l'étoile
+    put(20, 13, 'C');
+    rect(22, 14, 6, 1, '^'); // douves B : pics de x=22 à x=27
+    rect(22, 12, 2, 1, 'u'); // dalles à tour de rôle (on monte de 2 cases à chaque fois)
+    rect(25, 10, 2, 1, 'v');
+    rect(23, 6, 2, 1); // corniche de la clé (double saut de l'Archer)
+    put(24, 5, 'K');
+    rect(28, 8, 1, 6); // pilier de la sortie
+    put(28, 7, 'D');
+    put(1, 13, 'S');
+  }, { abilities: true, fire: true, and: [1], hold: { 1: 170 }, latch: { 1: 240 }, shutters: { 2: { period: 240, open: 140, phase: 60 }, 3: { period: 240, open: 140, phase: 140 } } }),
+
+  make('Les Oubliettes', 'Deux épreuves. 1) L’Archer monte sur la corniche de gauche : lui seul voit la séquence de 5 symboles. Il la dicte, le Mage touche les trois cristaux dans cet ordre (moins de 5 secondes entre deux tirs, une erreur remet tout à zéro). 2) Au-delà de la grille, les pics : l’Archer saute sur la dalle, le Mage échange sa place avec lui (bouton Échange, puis clic sur l’Archer), et ainsi de suite jusqu’en haut. Attention : la dalle du milieu disparaît par moments !', ({ rect, put }) => {
+    put(24, 2, '*'); // étoile cachée, au-dessus de la dernière dalle
+    rect(2, 10, 3, 1); // corniche de l'indice (l'Archer seul)
+    put(7, 3, 'z'); // cristaux de la séquence (numérotés de haut en bas)
+    put(13, 6, 'z');
+    put(16, 10, 'z');
+    put(12, 13, 'C');
+    rect(18, 1, 1, 13, 'c'); // grille : s'ouvre quand la séquence est juste
+    put(17, 13, 'C');
+    rect(19, 14, 10, 1, '^'); // pics de x=19 à x=28
+    rect(19, 11, 2, 1); // dalle 1 : 3 cases au-dessus du sol (Archer seulement)
+    rect(22, 8, 2, 1, 'u'); // dalle 2 : elle disparaît par moments
+    rect(25, 5, 2, 1); // dalle 3
+    put(26, 4, 'K');
+    rect(27, 9, 3, 1); // terrasse de la porte
+    put(28, 8, 'D');
+    put(2, 13, 'S');
+  }, {
+    abilities: true,
+    swap: true,
+    sequence: { group: 3, order: [2, 0, 1, 0, 2], timeout: 300 },
+    labels: [{ tx: 3, ty: 8, shapes: [2, 0, 1, 0, 2], role: 'archer', radius: 130 }],
+    shutters: { 3: { period: 360, open: 90, phase: 0 } },
+  }),
+
+  make('Le Donjon', 'La dernière épreuve avant le Gardien, et la plus dure. 1) L’Archer embrase le mur de bois. 2) Posez-vous À DEUX sur la plaque lourde et passez la grille avant qu’elle ne retombe. 3) Salle des sceaux : le Mage touche le cristal pendant que l’Archer tire sur la cible ET allume la torche, le tout en moins de 2 secondes. 4) Les dalles montent en vague au-dessus des pics, d’une à l’autre sans vous arrêter. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
+    put(26, 6, '*'); // étoile cachée, au-dessus de la corniche de la clé
+    rect(3, 1, 1, 13, 't'); // mur de bois (flèche de feu)
+    put(5, 13, '1'); // plaque lourde
+    put(6, 13, '1');
+    rect(10, 1, 1, 13, 'a'); // grille : la plaque est à 4 cases
+    put(11, 13, 'C');
+    put(13, 5, 'y'); // cristal du Mage (groupe 2)
+    put(16, 3, 'p'); // cible de l'Archer
+    put(17, 8, 'g'); // torche de l'Archer
+    rect(19, 1, 1, 13, 'b'); // grille de la salle des sceaux
+    put(18, 13, 'C');
+    put(20, 13, 'C');
+    rect(21, 14, 7, 1, '^'); // pics de x=21 à x=27
+    rect(22, 13, 2, 1, 'u'); // dalles en vague, de plus en plus hautes
+    rect(24, 12, 2, 1, 'v');
+    rect(26, 11, 2, 1, 'w');
+    rect(28, 10, 1, 4); // pilier de la porte
+    put(28, 9, 'D');
+    rect(23, 9, 3, 1); // corniche de la clé (double saut de l'Archer)
+    put(24, 8, 'K');
+    put(2, 13, 'S');
+  }, { abilities: true, fire: true, heavy: [1], and: [2], hold: { 2: 120 }, latch: { 1: 80, 2: 80 }, shutters: { 1: { period: 240, open: 140, phase: 220 }, 2: { period: 240, open: 140, phase: 60 }, 3: { period: 240, open: 140, phase: 140 } } }),
+
+  make('Le Gardien', 'Le boss est protégé par un bouclier. Il tombe quand le Mage touche le cristal (à gauche) ET que l’Archer touche la cible (à droite) en même temps : retouchez-les avant qu’ils ne s’éteignent, et tirez sur le cœur du Gardien tant qu’il est vulnérable ! Chaque attaque est annoncée : rochers (zones rouges), onde de choc (sautez !), boules de feu (un tir les éteint).', ({ rect, put }) => {
+    put(3, 5, '*'); // étoile cachée, tout en haut à gauche (l'Archer y monte par double saut, le Mage par l'éclair d'échange)
+    rect(2, 10, 3, 1);
+    rect(2, 6, 3, 1);
+    rect(25, 10, 3, 1);
+    put(1, 12, 'x'); // cristal du Mage
+    put(28, 12, 'o'); // cible de l’Archer
+    put(28, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, swap: true, and: [1], hold: { 1: 210 }, boss: { cx: 480, cy: 160, hp: 60, hearts: 6, name: 'Le Gardien' } }),
+
 ];
 
 // Chapitres : thème graphique, texte d'introduction et nombre de niveaux (dans l'ordre de LEVELS)
@@ -502,6 +587,7 @@ const CHAPTERS = [
   { name: 'La Forge', theme: 'forge', count: 4, blurb: 'Le bois brûle, les torches s’allument. Mais attention : le feu se propage à tout le bois relié.', powers: ['Archer : bouton Feu, puis clic dans le jeu (brûle le bois, allume les torches)', 'F : porter et lancer son coéquipier au-dessus des gouffres'] },
   { name: 'Les Brumes', theme: 'mist', count: 4, blurb: 'Le brouillard efface les distances. Il faudra échanger vos places.', powers: ['Mage : bouton Échange, puis clic sur l’autre joueur (vous échangez vos places)'] },
   { name: 'Le Sommet', theme: 'summit', count: 6, blurb: 'Le dernier chapitre : six épreuves très difficiles, chronos serrés. Les trois premières sont dures, les trois dernières extrêmes. Parlez-vous, répartissez-vous, et ne lâchez rien.', powers: ['Plaque lourde : il faut être deux dessus pour l’enfoncer', 'Tout ce que vous avez appris, d’affilée'] },
+  { name: 'La Citadelle', theme: 'citadel', count: 4, blurb: 'Le dernier rempart. Un gardien veille, et il ne se laissera pas faire.', powers: ['Bouclier du boss : cristal du Mage ET cible de l’Archer en même temps', 'Barre de vie du boss en haut, cœurs de l’équipe en dessous'] },
 ];
 
 let _c = 0;
@@ -522,6 +608,7 @@ const TIMERS = {
   'Premier feu': 70, 'Les quatre feux': 75, 'Le passeur': 90, 'Brasier': 85, // chapitre 6 : la Forge
   'Échange': 70, 'Le pilier': 75, 'Brouillard': 90, 'Cordée': 110, // chapitre 7 : les Brumes
   'Camp de base': 70, 'Métronome': 75, 'Tempête': 80, 'Cheminée': 100, 'Pointe de givre': 100, 'Le Sommet': 110, // chapitre 8 : le Sommet
+  'Les Douves': 80, 'Les Oubliettes': 85, 'Le Donjon': 100, 'Le Gardien': 240, // chapitre 9 : la Citadelle
 };
 LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 
@@ -531,9 +618,10 @@ LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] 
 // Diamant : le palier ultime, un temps de coordination parfaite (environ 58 % du temps d'or, déduit des parcours des bots
 // de test auxquels on laisse de la marge : un humain ne rejoue pas un bot).
 // Pour régler un niveau à la main : MEDALS = { 'Nom du niveau': [secondes pour l\u2019or, secondes pour l\u2019argent, secondes pour le diamant (facultatif)] }
-const GOLD_RATIOS = [0.4, 0.45, 0.45, 0.5, 0.5, 0.5, 0.5, 0.55];
-const SILVER_RATIOS = [0.65, 0.7, 0.7, 0.75, 0.75, 0.75, 0.75, 0.8];
-const MEDALS = {};
+const GOLD_RATIOS = [0.4, 0.45, 0.45, 0.5, 0.5, 0.5, 0.5, 0.55, 0.6];
+const SILVER_RATIOS = [0.65, 0.7, 0.7, 0.75, 0.75, 0.75, 0.75, 0.8, 0.85];
+// Le combat de boss dure plus longtemps qu'un niveau : temps fixés à la main [or, argent, diamant]
+const MEDALS = { 'Le Gardien': [110, 170, 65] };
 LEVELS.forEach((l) => {
   const m = MEDALS[l.name];
   const g = GOLD_RATIOS[l.chapter] || 0.5;
