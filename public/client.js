@@ -83,6 +83,9 @@ const CUSTOM_TRACKS = {
   dark: { yt: 'VMUmA6YszKs', start: 48, title: 'Laura Ferré · Lucifer' },
   sanctuary: { yt: 'kQWoeq1oAbc', title: 'AXMO x Aki Hiro · Castle In The Sky' },
   garden: { yt: 'BtyHYIpykN0', start: 122, title: 'PNL · Au DD' },
+  forge: { yt: 'oL-y9O8FD14', title: 'Musique de la Forge' },
+  mist: { yt: 'Y-cWAGiVeF8', title: 'Musique des Brumes' },
+  summit: { yt: 'fB8TyLTD7EE', start: 12, title: 'Musique du Sommet' },
 };
 const CUSTOM_VOLUME = 15; // 0 à 100 : volume de ces musiques (bas, pour ne pas couvrir les bruitages)
 
@@ -2826,7 +2829,6 @@ function draw() {
     }
   });
 
-  L.checkpoints.forEach((c, i) => drawCheckpoint(c, T, world.cps.includes(i), frame));
   L.torches.forEach((t, i) => drawTorch(t, T, !!world.tc[i], frame));
   L.crystals.forEach((c, i) => {
     const seqShape = c.seqIndex >= 0 ? c.seqIndex % 3 : -1;

@@ -294,17 +294,10 @@ function respawn(room, p) {
   room.events.push(['die', Math.round(p.x), Math.round(p.y)]);
 }
 
+// Les pics renvoient toujours au départ du niveau (le niveau, lui, n'est pas remis à zéro)
 function hazardsAndCheckpoints(room, list) {
   const L = room.level;
   for (const p of list) if (hitsSpikes(L, p)) respawn(room, p);
-  L.checkpoints.forEach((cp, i) => {
-    if (room.cps.has(i)) return;
-    const zone = { x: cp.x + 4, y: cp.y, w: TILE - 8, h: TILE };
-    if (list.some((p) => touchesRect(p, zone))) {
-      room.cps.add(i);
-      room.respawn = { x: cp.x + (TILE - PW) / 2, y: cp.y + TILE - PH };
-    }
-  });
 }
 
 /* ---------- Sorts et tirs ---------- */

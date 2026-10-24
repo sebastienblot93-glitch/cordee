@@ -45,14 +45,14 @@
   // Légende des niveaux :
   //   #  bloc solide              .  vide
   //   S  départ                   D  porte de sortie (s'ouvre quand toutes les clés sont prises)
-  //   K  clé                      C  checkpoint (point de retour après une chute)
+  //   K  clé                      C  (ancien checkpoint : n'a plus d'effet, on réapparaît toujours au départ)
   //   1 2 3  plaques au sol       a b c  portes liées aux groupes 1 2 3
   //   x y z  cristaux (orbe du Mage) des groupes 1 2 3
   //   o p q  cibles (flèche de l'Archer) des groupes 1 2 3
   //   w v u  volets qui s'ouvrent et se ferment en rythme (groupes 1 2 3)
   //   h  bloc caché (solide, mais visible seulement près de la lumière du Mage)
   //   r  zone de rune : le Mage peut y poser un bloc de glace
-  //   ^  pics : un contact renvoie au dernier checkpoint
+  //   ^  pics : un contact renvoie au départ du niveau
   //   j  ressort : un joueur qui retombe dessus est propulsé très haut
   //   t  bois : bloc solide que la flèche de feu de l'Archer brûle (et tout le bois relié)
   //   l  bloc lié : solide seulement quand les joueurs restent proches (COOP.linkDist)
