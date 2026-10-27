@@ -52,7 +52,12 @@ const sprites = new Map(); // id -> { x, y, tx, ty, face, vy, ... }
 const mouse = { x: 0, y: 0, has: false };
 
 // Netteté : sur un écran HiDPI, le canvas est dessiné à résolution double (RES). LW x LH = taille logique du niveau.
-let RES = (window.devicePixelRatio || 1) >= 1.5 ? 2 : 1;
+let RES = 1;
+let resCap = 1.5; // jamais plus de 1,5 : au-delà, la carte graphique dessine bien plus de pixels pour un gain à peine visible
+function pickRes() { // résolution adaptée à la taille réellement affichée (écran HiDPI inclus)
+  const w = canvas.clientWidth || 960;
+  return Math.min(resCap, Math.max(1, Math.round(((w * (window.devicePixelRatio || 1)) / LW) * 4) / 4));
+}
 let LW = 960;
 let LH = 480;
 
@@ -1109,7 +1114,7 @@ function drawBossHazards(frame) {
 
 /* ---------- Fantôme de la meilleure partie (discret : transparent, désactivable avec le bouton 👻) ---------- */
 const Ghost = {
-  on: true,
+  on: false, // désactivé par défaut : il ne coûte rien tant qu'on ne l'active pas
   rec: null, // enregistrement en cours : { t0, last, ids, d: [] }
   best: null, // fantôme affiché : { t, p: [{k, s, c}], n, pos: Float32Array }
   startAt: 0,
@@ -1140,7 +1145,7 @@ const Ghost = {
   // Début de niveau : on prépare l'enregistrement et on charge le fantôme (local, puis celui de l'équipe s'il est plus rapide)
   start(lv) {
     this.startAt = performance.now();
-    if (lv.chapter && lv.chapter.tutorial) { this.rec = null; this.best = null; return; }
+    if (!this.on || (lv.chapter && lv.chapter.tutorial)) { this.rec = null; this.best = null; return; }
     this.rec = { t0: this.startAt, next: 0, d: [], ids: null, prev: null };
     this.best = this.load(lv.name);
     this.fetched = null;
@@ -1231,14 +1236,15 @@ const Ghost = {
   },
 };
 setInterval(() => Ghost.sample(), 50);
-try { Ghost.on = localStorage.getItem('cordee.ghost') !== '0'; } catch { /* ignore */ }
+try { Ghost.on = localStorage.getItem('cordee.ghost2') === '1'; } catch { /* ignore */ }
 function updateGhostButton() {
   $('btn-ghost').classList.toggle('off', !Ghost.on);
-  $('btn-ghost').title = Ghost.on ? 'Fantôme de votre meilleure partie : affiché (cliquer pour le masquer)' : 'Fantôme de votre meilleure partie : masqué (cliquer pour l’afficher)';
+  $('btn-ghost').title = Ghost.on ? 'Fantôme de votre meilleure partie : activé (cliquer pour le désactiver)' : 'Fantôme de votre meilleure partie : désactivé (cliquer pour l’activer, à partir du prochain niveau)';
 }
 $('btn-ghost').onclick = () => {
   Ghost.on = !Ghost.on;
-  try { localStorage.setItem('cordee.ghost', Ghost.on ? '1' : '0'); } catch { /* ignore */ }
+  try { localStorage.setItem('cordee.ghost2', Ghost.on ? '1' : '0'); } catch { /* ignore */ }
+  if (!Ghost.on) { Ghost.rec = null; Ghost.best = null; }
   updateGhostButton();
   window.Sfx.play('click');
 };
@@ -1425,7 +1431,7 @@ function startLevel(msg) {
   level.bg = window.Themes.makeBackground(level.theme, LW, LH, msg.index + 1, RES);
   level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, msg.index + 1, RES);
   level.decor = window.Themes.makeDecor(level.theme, LW, LH, msg.index + 1);
-  level.vig = makeVignette(LW, LH, level.theme);
+  updateVig();
   level.shift = 0;
   irisT = 0;
   shakeMag = 0;
@@ -1866,7 +1872,12 @@ function tutTourStart(again) {
 }
 $('coach-next').onclick = () => { tut.tour++; coachShow(); };
 $('coach-skip').onclick = () => coachEnd(true);
-window.addEventListener('resize', () => { if (tut.tourOn) coachShow(); });
+let resizeT = 0;
+window.addEventListener('resize', () => {
+  if (tut.tourOn) coachShow();
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { if (level && pickRes() !== RES) rebuildAssets(); updateVig(); }, 400);
+});
 
 // Début d'un niveau : la visite démarre toute seule (une fois), puis une consigne à la fois
 function tutorialUi() {
@@ -2226,6 +2237,7 @@ canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 function setupCanvas() {
   LW = level.rows[0].length * level.tile;
   LH = level.rows.length * level.tile;
+  RES = pickRes();
   canvas.width = LW * RES;
   canvas.height = LH * RES;
   ctx.setTransform(RES, 0, 0, RES, 0, 0);
@@ -3554,18 +3566,14 @@ function lightAt(lightSources, x, y) {
 }
 
 // Bords sombres (vignette), pré-rendus une fois par niveau
-function makeVignette(w, h, theme) {
-  const c = document.createElement('canvas');
-  c.width = Math.ceil(w / 2);
-  c.height = Math.ceil(h / 2);
-  const g = c.getContext('2d');
-  const light = window.Themes.get(theme).light;
-  const k = g.createRadialGradient(c.width / 2, c.height / 2, c.height * 0.45, c.width / 2, c.height / 2, c.width * 0.62);
-  k.addColorStop(0, 'rgba(10,6,30,0)');
-  k.addColorStop(1, light ? 'rgba(20,10,40,.30)' : 'rgba(0,0,12,.5)');
-  g.fillStyle = k;
-  g.fillRect(0, 0, c.width, c.height);
-  return c;
+// Vignettage : un voile CSS posé sur le canvas (la carte graphique le garde tout prêt, au lieu de le redessiner à chaque image)
+function updateVig() {
+  const v = $('vig');
+  if (!level) { v.style.background = 'none'; return; }
+  const k = (canvas.clientWidth || 960) / LW;
+  const light = window.Themes.get(level.theme).light;
+  const c = light ? 'rgba(20,10,40,.30)' : 'rgba(0,0,12,.5)';
+  v.style.background = `radial-gradient(circle at 50% 50%, rgba(10,6,30,0) ${LH * 0.45 * k}px, ${c} ${LW * 0.62 * k}px)`;
 }
 
 /* ---------- Qualité automatique : si l'ordinateur rame, on allège le rendu ---------- */
@@ -3581,8 +3589,8 @@ function rebuildAssets() {
   level.tiles = window.Themes.makeTiles(level.theme, level.rows, level.tile, level.index + 1, RES);
 }
 function lighten() {
-  if (RES > 1) { // 1er palier : on arrête le rendu en double résolution (4 fois moins de pixels à dessiner)
-    RES = 1;
+  if (RES > 1) { // 1er palier : on revient à la résolution de base (beaucoup moins de pixels à dessiner)
+    resCap = 1;
     rebuildAssets();
   } else if (!fxLow) { // 2e palier : moins de lueurs et de particules
     fxLow = true;
@@ -3604,6 +3612,7 @@ function governQuality(now) {
 // Le jeu est réglé pour 60 images par seconde (animations, lissage). Sur un écran 120/144 Hz on ne dessine qu'une image sur deux
 // ou presque : deux fois moins de travail pour la carte graphique, et des mouvements identiques partout.
 let nextDue = 0;
+let vigW = 0;
 const diag = { on: false, fps: 0, ms: 0, worst: 0, gap: 0, n: 0, acc: 0, since: 0, lastMsg: 0, gapMax: 0, el: null };
 function diagTick(t, cost) {
   diag.n++; diag.acc += cost;
@@ -3826,7 +3835,6 @@ function draw() {
   drawCoopOverlay(mine);
 
   ctx.globalAlpha = 1;
-  ctx.drawImage(level.vig, 0, 0, W, H);
 
   // ouverture en iris au début d'un niveau
   if (irisT < 1) {
@@ -3854,6 +3862,7 @@ function draw() {
   }
 
   if (frame % 3 === 0) updateActionCooldowns();
+  if (frame % 30 === 0 && canvas.clientWidth !== vigW) { vigW = canvas.clientWidth; updateVig(); }
   diagTick(t0, performance.now() - t0);
 }
 
