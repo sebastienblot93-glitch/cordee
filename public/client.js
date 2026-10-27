@@ -264,7 +264,12 @@ function connect(onOpen) {
     level = null;
     lastChapter = -1;
   };
-  ws.onmessage = (e) => handle(JSON.parse(e.data));
+  ws.onmessage = (e) => {
+    const t = performance.now();
+    if (diag.lastMsg && world && world.status === 'playing') diag.gapMax = Math.max(diag.gapMax, t - diag.lastMsg); // plus long silence du serveur
+    diag.lastMsg = t;
+    handle(JSON.parse(e.data));
+  };
 }
 
 function send(msg) {
@@ -2156,6 +2161,14 @@ function cast(slot) {
 }
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'F3' && !e.repeat) { // diagnostic de fluidité
+    e.preventDefault();
+    diag.on = !diag.on;
+    $('diag').style.display = diag.on ? 'block' : 'none';
+    if (!diag.on) return;
+    $('diag').textContent = 'mesure en cours…';
+    return;
+  }
   if (e.code === 'KeyP' && !e.repeat && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))) {
     window.Sfx.toggle();
     updateMuteButton();
@@ -2189,7 +2202,7 @@ window.addEventListener('blur', () => {
 });
 
 const canvas = $('canvas');
-let ctx = canvas.getContext('2d'); // 'let' : on le remplace un instant pour pré-dessiner les petits sprites (voir cachedSprite)
+let ctx = canvas.getContext('2d', { alpha: false, desynchronized: true }); // 'let' : on le remplace un instant pour pré-dessiner les petits sprites (voir cachedSprite)
 const mainCtx = ctx;
 
 function canvasPoint(e) {
@@ -2217,7 +2230,7 @@ function setupCanvas() {
   canvas.height = LH * RES;
   ctx.setTransform(RES, 0, 0, RES, 0, 0);
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = 'low'; // 'high' ralentit chaque drawImage redimensionné (halos, sprites) pour un gain invisible
 }
 
 /* ---------- Rendu : éléments du niveau (style cartoon lisse) ---------- */
@@ -3585,15 +3598,35 @@ function governQuality(now) {
   lastDrawAt = now;
   if (dt <= 0 || dt > 250) return; // onglet en arrière-plan ou pause : on ignore
   slowAvg += (dt - slowAvg) * 0.05;
-  if (slowAvg > 24) { if (++slowCount > 150) lighten(); } else slowCount = Math.max(0, slowCount - 2);
+  if (slowAvg > 21) { if (++slowCount > 90) lighten(); } else slowCount = Math.max(0, slowCount - 2);
 }
 
+// Le jeu est réglé pour 60 images par seconde (animations, lissage). Sur un écran 120/144 Hz on ne dessine qu'une image sur deux
+// ou presque : deux fois moins de travail pour la carte graphique, et des mouvements identiques partout.
+let nextDue = 0;
+const diag = { on: false, fps: 0, ms: 0, worst: 0, gap: 0, n: 0, acc: 0, since: 0, lastMsg: 0, gapMax: 0, el: null };
+function diagTick(t, cost) {
+  diag.n++; diag.acc += cost;
+  diag.worst = Math.max(diag.worst, cost);
+  if (t - diag.since < 1000) return;
+  diag.fps = Math.round((diag.n * 1000) / (t - diag.since));
+  diag.ms = diag.acc / diag.n;
+  diag.gap = diag.gapMax;
+  const el = diag.el || (diag.el = $('diag'));
+  if (diag.on) {
+    el.textContent = `${diag.fps} i/s · dessin ${diag.ms.toFixed(1)} ms (pire ${diag.worst.toFixed(0)}) · ping ${Math.round(pingRtt)} ms · trou réseau max ${Math.round(diag.gap)} ms · RES ${RES}${fxLow ? ' · allégé' : ''} · écran ${devicePixelRatio}x`;
+  }
+  diag.n = 0; diag.acc = 0; diag.worst = 0; diag.gapMax = 0; diag.since = t;
+}
 function draw() {
   requestAnimationFrame(draw);
+  const t0 = performance.now();
+  if (t0 < nextDue - 1.5) return;
+  nextDue = Math.max(nextDue + 1000 / 60, t0 - 8);
   drawPreview();
   if (!level || !world) return;
   frame++;
-  governQuality(performance.now());
+  governQuality(t0);
   const T = level.tile;
   const L = level.L;
   const W = LW;
@@ -3821,6 +3854,7 @@ function draw() {
   }
 
   if (frame % 3 === 0) updateActionCooldowns();
+  diagTick(t0, performance.now() - t0);
 }
 
 if (window.Progress) {
