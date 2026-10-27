@@ -594,12 +594,12 @@ function hazardsAndCheckpoints(room, list) {
 // cristal et cible (on peut le faire d'avance) sans cesser d'esquiver.
 // Trois phases (à 66 % et 33 % de vie) : attaques plus rapprochées, plus nombreuses, plus vives. Chaque attaque est annoncée.
 const BOSS_PHASE = {
-  1: { gap: 170, rocks: 3, warn: 78, ball: 2.6, wave: 2.8, down: 300, cool: 170 },
-  2: { gap: 120, rocks: 4, warn: 62, ball: 3.2, wave: 3.5, down: 270, cool: 140 },
-  3: { gap: 88, rocks: 5, warn: 50, ball: 3.8, wave: 4.2, down: 240, cool: 110 },
+  1: { gap: 220, rocks: 3, warn: 92, ball: 2.3, wave: 2.5, down: 360, cool: 150 },
+  2: { gap: 165, rocks: 3, warn: 78, ball: 2.8, wave: 3.0, down: 330, cool: 130 },
+  3: { gap: 125, rocks: 4, warn: 64, ball: 3.3, wave: 3.6, down: 300, cool: 100 },
 };
 const BOSS_DMG = { orb: 1, arrow: 1, fire: 2 };
-const HURT_INV = 100; // ticks d'invincibilité après un coup (un joueur touché clignote)
+const HURT_INV = 130; // ticks d'invincibilité après un coup (un joueur touché clignote)
 const WAVE_H = 22;
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -644,13 +644,13 @@ function launchAttack(room, list, kind) {
   } else if (kind === 'wave') {
     const dirs = B.phase === 1 ? [Math.random() < 0.5 ? 1 : -1] : [1, -1];
     const fromWalls = B.phase === 3;
-    dirs.forEach((d) => B.hz.push({ k: 'w', x: fromWalls ? (d > 0 ? TILE : W - TILE) : W / 2, dir: fromWalls ? d : d, warn: 48, vx: ph.wave }));
-    if (B.phase === 3) dirs.forEach((d) => B.hz.push({ k: 'w', x: d > 0 ? TILE : W - TILE, dir: d, warn: 48 + 46, vx: ph.wave }));
+    dirs.forEach((d) => B.hz.push({ k: 'w', x: fromWalls ? (d > 0 ? TILE : W - TILE) : W / 2, dir: fromWalls ? d : d, warn: 60, vx: ph.wave }));
+    if (B.phase === 3) dirs.forEach((d) => B.hz.push({ k: 'w', x: d > 0 ? TILE : W - TILE, dir: d, warn: 60 + 52, vx: ph.wave }));
   } else if (kind === 'ball') {
     const n = B.phase === 1 ? 1 : B.phase === 2 ? 2 : 3;
     for (let i = 0; i < n; i++) {
       const tgt = alive[(i + Math.floor(Math.random() * 2)) % alive.length];
-      B.hz.push({ k: 'b', x: B.x, y: B.y + 22, warn: 44 + i * 16, tx: tgt.x + PW / 2, ty: tgt.y + PH / 2, vx: 0, vy: 0, spd: ph.ball, who: tgt });
+      B.hz.push({ k: 'b', x: B.x, y: B.y + 22, warn: 54 + i * 20, tx: tgt.x + PW / 2, ty: tgt.y + PH / 2, vx: 0, vy: 0, spd: ph.ball, who: tgt });
     }
   }
 }
@@ -667,7 +667,7 @@ function stepBoss(room, list) {
   B.y = B.cy + Math.sin(B.t * 0.023) * 12;
   const ratio = B.hp / B.max;
   const want = ratio > 0.66 ? 1 : ratio > 0.33 ? 2 : 3;
-  if (want > B.phase) { // changement de phase : le boss rugit, tout s'arrête un instant, l'équipe reprend 2 cœurs
+  if (want > B.phase) { // changement de phase : le boss rugit, tout s'arrête un instant, l'équipe reprend 3 cœurs
     B.phase = want;
     B.hz = [];
     B.pause = 140;
@@ -676,7 +676,7 @@ function stepBoss(room, list) {
     B.until = B.t + 140 + 60;
     room.crystalUntil.fill(0);
     room.targetUntil.fill(0);
-    room.hearts = Math.min(B.hearts, room.hearts + 2);
+    room.hearts = Math.min(B.hearts, room.hearts + 3);
     room.events.push(['bphase', Math.round(B.x), Math.round(B.y)]);
   }
   if (B.pause > 0) { B.pause--; return; }
@@ -699,7 +699,7 @@ function stepBoss(room, list) {
     const k = kinds[Math.floor(Math.random() * kinds.length)];
     B.last = k;
     launchAttack(room, list, k);
-    if (B.phase === 3 && Math.random() < 0.4) launchAttack(room, list, kinds.find((x) => x !== k) || 'rain');
+    if (B.phase === 3 && Math.random() < 0.2) launchAttack(room, list, kinds.find((x) => x !== k) || 'rain');
     B.next = B.t + ph.gap + Math.floor(rnd(0, 30));
   }
   const floorY = (L.h - 1) * TILE;
@@ -950,7 +950,6 @@ function startMsg(room) {
       carry: !!def.carry,
       heavy: def.heavy || [],
       boss: def.boss ? { hp: def.boss.hp, hearts: def.boss.hearts, name: def.boss.name } : null,
-      tips: def.tips || [],
       tutorial: def.tutorial ? { steps: TUT_STEPS } : null,
     },
   };
@@ -1308,6 +1307,7 @@ wss.on('connection', (ws) => {
         applyRole(room, me);
         broadcast(room, lobbyMsg(room));
         tutStep(room, me, 'role');
+        if (other) tutStep(room, other, 'role');
         break;
       }
       case 'emote': {

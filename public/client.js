@@ -297,7 +297,7 @@ function handle(msg) {
         updateHud();
         rolesChanged(prevRoles);
         updateTeamBar();
-        if (tutOn()) renderTutBook();
+        if (tutOn()) renderTutStep();
       }
       break;
     case 'nograb':
@@ -617,7 +617,7 @@ function reactToState(prev, msg) {
       flash(e[1], e[2], '#ffffff', 220, 24);
       shake(9);
       sfx('bphase', 300);
-      toast('Le Gardien rugit ! Phase suivante… (+2 cœurs)');
+      toast('Le Gardien rugit ! Phase suivante… (+3 cœurs)');
     } else if (e[0] === 'bdie') {
       for (let i = 0; i < 5; i++) {
         setTimeout(() => {
@@ -1202,7 +1202,7 @@ const Ghost = {
     const i = Math.min(Math.floor(f), g.n - 2);
     const k = Math.min(1, f - i);
     const fade = f > g.n - 1 ? Math.max(0, 1 - (f - (g.n - 1)) / 15) : 1;
-    const fr = Math.floor(f);
+    ctx.save();
     for (let q = 0; q < g.np; q++) {
       const a = (i * g.np + q) * 2;
       const b = ((i + 1) * g.np + q) * 2;
@@ -1210,17 +1210,19 @@ const Ghost = {
       const y0 = g.pos[a + 1];
       const x = x0 + (g.pos[b] - x0) * k;
       const y = y0 + (g.pos[b + 1] - y0) * k;
-      const vx = g.pos[b] - x0;
-      const vy = g.pos[b + 1] - y0;
       const look = g.p[q];
-      ctx.save();
-      ctx.globalAlpha = 0.3 * fade;
-      Skins.draw(ctx, look.s, x, y, {
-        dir: g.face[(i * g.np) + q] || 1, color: look.c, t: fr * 0.6, kit: look.k, walk: Math.abs(vx) > 1 && Math.abs(vy) < 2 ? 1 : 0,
-        air: Math.abs(vy) > 1.5, vy: vy / 6, dash: false, look: { x: 0, y: 0 }, cast: null,
-      });
-      ctx.restore();
+      // Silhouette très simple et très discrète (pas de vrai dessin du skin : bien moins coûteux, et on ne se laisse pas distraire)
+      const dir = g.face[(i * g.np) + q] || 1;
+      ctx.globalAlpha = 0.12 * fade;
+      ctx.fillStyle = look.c || '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(x + PW / 2 + PW * 0.46, y + PH * 0.62);
+      ctx.ellipse(x + PW / 2, y + PH * 0.62, PW * 0.46, PH * 0.4, 0, 0, 6.2832);
+      ctx.moveTo(x + PW / 2 + dir * 3 + PW * 0.36, y + PH * 0.22);
+      ctx.ellipse(x + PW / 2 + dir * 3, y + PH * 0.22, PW * 0.36, PH * 0.26, 0, 0, 6.2832);
+      ctx.fill();
     }
+    ctx.restore();
   },
 };
 setInterval(() => Ghost.sample(), 50);
@@ -1405,7 +1407,7 @@ function startLevel(msg) {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
       seqGroup: cfg.seqGroup || 0, labels: cfg.labels || [],
       link: !!cfg.link, sync: !!cfg.sync, carry: !!cfg.carry, heavy: cfg.heavy || [], boss: cfg.boss || null,
-      tips: cfg.tips || [], tutorial: cfg.tutorial || null,
+      tutorial: cfg.tutorial || null,
     },
     L,
   };
@@ -1419,7 +1421,6 @@ function startLevel(msg) {
   level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, msg.index + 1, RES);
   level.decor = window.Themes.makeDecor(level.theme, LW, LH, msg.index + 1);
   level.vig = makeVignette(LW, LH, level.theme);
-  level.tipSprites = (level.cfg.tips || []).map(makeTipSprite);
   level.shift = 0;
   irisT = 0;
   shakeMag = 0;
@@ -1689,10 +1690,52 @@ $('btn-help').onclick = () => (level ? openHelpByHand() : null);
 $('btn-hint').addEventListener('mousedown', (e) => e.preventDefault());
 $('btn-hint').onclick = () => revealHint();
 
-/* ---------- Tutoriel : carnet des touches, bulles dans le jeu, visite de l'interface ---------- */
-const tut = { need: [], p: {} };
-const coach = { i: -1, seen: false, timer: 0, steps: [] };
+/* ---------- Tutoriel : une consigne à la fois ---------- */
+// Le serveur valide chaque touche (étape « step ») ; ici on n'affiche que la prochaine consigne utile pour ce joueur.
+// L'ordre de la liste est l'ordre du parcours. Une étape avec « kit » ne s'affiche que si on a ce rôle (après T, celles de l'autre rôle apparaissent).
+const TUT_PLAN = [
+  { tour: '#hud-level', text: 'Bienvenue ! Je vais tout t’expliquer, une chose à la fois. D’abord l’écran. En haut : le chapitre et le nom du niveau (le chrono s’affiche au milieu quand le niveau en a un).' },
+  { tour: '#hud-keys', text: 'Les clés du niveau : il faut les ramasser toutes pour ouvrir la porte. Ton nombre de chutes s’affiche aussi ici.' },
+  { tour: '#hud-ping', text: 'Ton ping : le délai avec le serveur, en millisecondes. Plus il est bas, plus le jeu est fluide.' },
+  { tour: '#actionbar', text: 'Tes sorts, selon ton rôle (Mage ou Archer). On clique sur un sort pour l’armer, puis dans le jeu pour viser. La jauge montre la recharge. Raccourcis : 1, 2, 3.' },
+  { tour: '#teambar', text: 'Ici : échanger les rôles avec ton coéquipier (T), le porter / le lancer (F) et les emotes (G, M, J).' },
+  { tour: '#level-hint', text: 'L’indice du niveau reste masqué : touche I. Le regarder compte comme une aide (pour la médaille « sans indice »).' },
+  { tour: '#audio-ctl', text: 'Enfin : tes Records et tes Étoiles, la musique et son volume, le fantôme de ta meilleure partie (👻) et le son (touche P). La visite est finie : place au jeu !' },
+  { step: 'move', at: [2, 11], text: 'Bouge avec <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>). Va à gauche, puis à droite.' },
+  { step: 'jump', at: [4, 10], text: 'Saute avec <kbd>Espace</kbd> : passe par-dessus le muret.' },
+  { step: 'dash', at: [8, 11], text: 'La fosse est trop large pour un simple saut. Cours, saute, puis appuie sur <kbd>Maj</kbd> en plein vol : c’est le dash. Traverse !' },
+  { step: 'grab', needs2: true, at: [14, 11], text: 'Colle-toi à ton coéquipier (même hauteur) et appuie sur <kbd>F</kbd> : tu le portes.' },
+  { step: 'throw', needs2: true, at: [14, 11], text: 'Appuie encore sur <kbd>F</kbd> : tu le lances devant toi. (Le porté peut sauter pour descendre.)' },
+  { step: 'orb', kit: 'mage', at: [15, 8], text: 'Tu es le <b>Mage</b>. <b>Clic gauche</b> dans le jeu sur le cristal violet : ton orbe l’allume. L’Archer doit toucher la cible rouge en même temps pour ouvrir la grille.' },
+  { step: 'arrow', kit: 'archer', at: [17, 8], text: 'Tu es l’<b>Archer</b>. <b>Clic gauche</b> sur la cible rouge : ta flèche (elle retombe, vise un peu plus haut). Le Mage doit toucher le cristal en même temps.' },
+  { step: 'fire', kit: 'archer', at: [21, 8], text: 'Archer : clique sur le bouton <b>Feu</b> (ou clic droit), puis clique sur la torche pour l’allumer. Ça ouvre la grille suivante.' },
+  { step: 'ice', kit: 'mage', at: [24, 12], text: 'Mage : <b>clic droit</b> sur la rune (le symbole au sol, à droite) : tu crées un bloc de glace qui fond au bout d’un moment.' },
+  { step: 'swap', kit: 'mage', text: 'Mage : clique sur le bouton <b>Échange</b> (ou touche <kbd>E</kbd>), puis clique sur ton coéquipier : vous échangez vos places.' },
+  { step: 'dbl', kit: 'archer', at: [24, 9], text: 'Archer : appuie deux fois sur <kbd>Espace</kbd>, la deuxième fois en l’air : c’est le double saut. Monte sur la corniche.' },
+  { step: 'role', text: 'Appuie sur <kbd>T</kbd> : toi et ton coéquipier échangez vos rôles (Mage ↔ Archer). Ensuite, essayez les pouvoirs de l’autre rôle !' },
+  { step: 'emote', text: 'Appuie sur <kbd>G</kbd>, <kbd>M</kbd> ou <kbd>J</kbd> : une emote apparaît au-dessus de toi.' },
+  { step: 'mark', text: '<kbd>Ctrl</kbd> + <b>clic droit</b> dans le jeu : « regarde ici », un repère que ton coéquipier voit.' },
+  { step: 'hint', text: 'Appuie sur <kbd>I</kbd> pour lire l’indice du niveau.' },
+  { step: 'help', text: 'Appuie sur <kbd>H</kbd> pour ouvrir l’aide complète (<kbd>Échap</kbd> pour la fermer).' },
+];
+const tut = { need: [], p: {}, tour: 0, tourOn: false, timer: 0, seen: false };
 const tutOn = () => !!(level && level.cfg.tutorial);
+const tutTourStages = () => TUT_PLAN.filter((x) => x.tour && (x.tour !== '#hud-keys' || (level && level.keys.length)));
+
+function tutCurrent() { // prochaine consigne : { stage, n, total } ou { end: true, ... }
+  const mine = new Set(tut.p[myId] || []);
+  const kit = myKit();
+  const need = tut.need;
+  const total = need.length;
+  const done = need.filter((id) => mine.has(id)).length;
+  if (tut.tour < tutTourStages().length) return null; // visite de l'interface en cours
+  for (const st of TUT_PLAN) {
+    if (!st.step || !need.includes(st.step) || mine.has(st.step)) continue;
+    if (st.kit && st.kit !== kit) continue;
+    return { stage: st, n: done + 1, total };
+  }
+  return { end: true, n: total, total };
+}
 
 function onTut(msg) {
   const before = new Set(tut.p[myId] || []);
@@ -1704,156 +1747,132 @@ function onTut(msg) {
     const st = level.cfg.tutorial.steps.find((x) => x.id === id);
     if (st) { toast(`✔ ${st.label}`); window.Sfx.play('mark', 80); }
   });
-  renderTutBook();
+  renderTutStep();
 }
 
-function renderTutBook() {
-  const book = $('tut-book');
-  if (!tutOn()) { book.classList.remove('on'); return; }
-  const steps = level.cfg.tutorial.steps.filter((x) => tut.need.includes(x.id));
-  const mine = new Set(tut.p[myId] || []);
+function renderTutStep() {
+  const box = $('tut-step');
+  if (!tutOn()) { box.classList.remove('on'); return; }
+  const cur = tutCurrent();
+  if (!cur) { box.classList.remove('on'); return; } // la visite guidée parle à la place
   const mate = players.find((q) => q.id !== myId);
-  const theirs = new Set((mate && tut.p[mate.id]) || []);
-  const nMine = steps.filter((x) => mine.has(x.id)).length;
-  const nTheirs = steps.filter((x) => theirs.has(x.id)).length;
-  book.innerHTML = '';
-  const head = document.createElement('div');
-  head.className = 'tb-head';
-  const title = document.createElement('span');
-  title.innerHTML = `<b>Carnet des touches</b> · toi ${nMine}/${steps.length}${mate ? ` · ${mate.name.replace(/[<>&]/g, '')} ${nTheirs}/${steps.length}` : ''}`;
-  head.append(title);
-  const btns = document.createElement('span');
-  btns.className = 'tb-btns';
-  const visit = document.createElement('button');
-  visit.className = 'ghost'; visit.type = 'button'; visit.tabIndex = -1; visit.textContent = 'Revoir la visite';
-  visit.addEventListener('mousedown', (e) => e.preventDefault());
-  visit.onclick = () => coachStart();
-  btns.append(visit);
-  if (myId === hostId) {
-    const skip = document.createElement('button');
-    skip.className = 'ghost'; skip.type = 'button'; skip.tabIndex = -1; skip.textContent = 'Passer le tutoriel';
-    skip.addEventListener('mousedown', (e) => e.preventDefault());
-    skip.onclick = () => { if (confirm('Passer le tutoriel et commencer au niveau 1 ?')) send({ t: 'skip' }); };
-    btns.append(skip);
+  let text;
+  let head;
+  if (cur.end) {
+    const needN = tut.need.length;
+    const mateDone = mate ? tut.need.filter((id) => (tut.p[mate.id] || []).includes(id)).length : needN;
+    head = 'Tutoriel terminé pour toi';
+    text = mateDone >= needN
+      ? 'Bravo ! Tout est validé par vous deux : la grille du fond est ouverte. Prenez la clé, puis rejoignez la porte tous les deux.'
+      : `Bravo, tu as tout validé ! Ton coéquipier en est à ${mateDone}/${needN} : aide-le (il peut te demander de changer de rôle avec <kbd>T</kbd>). La grille du fond s’ouvrira quand il aura fini.`;
   } else {
-    const note = document.createElement('span');
-    note.textContent = 'Le chef de room peut passer le tutoriel.';
-    btns.append(note);
+    head = `Tutoriel · touche ${Math.min(cur.n, cur.total)}/${cur.total}`;
+    text = cur.stage.text;
   }
-  head.append(btns);
-  book.append(head);
-  const ul = document.createElement('ul');
-  ul.id = 'tut-list';
-  steps.forEach((x) => {
-    const li = document.createElement('li');
-    li.className = (mine.has(x.id) ? 'done' : '') + (theirs.has(x.id) ? ' mate' : '');
-    li.innerHTML = `<i>${mine.has(x.id) ? '✔' : '○'}</i>${x.label}<em>${x.key}</em>`;
-    ul.append(li);
-  });
-  book.append(ul);
-  book.classList.add('on');
+  box.innerHTML = '';
+  const h = document.createElement('div');
+  h.className = 'ts-head';
+  const t = document.createElement('b');
+  t.textContent = head;
+  h.append(t);
+  const bar = document.createElement('i');
+  bar.style.setProperty('--p', `${Math.round(((cur.end ? cur.total : cur.n - 1) / Math.max(1, cur.total)) * 100)}%`);
+  h.append(bar);
+  box.append(h);
+  const p = document.createElement('p');
+  p.innerHTML = text;
+  box.append(p);
+  const row = document.createElement('div');
+  row.className = 'ts-row';
+  const mk = (label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ghost'; b.tabIndex = -1; b.textContent = label;
+    b.addEventListener('mousedown', (e) => e.preventDefault());
+    b.onclick = fn;
+    row.append(b);
+  };
+  mk('Revoir la visite', () => tutTourStart(true));
+  if (myId === hostId) mk('Passer le tutoriel', () => { if (confirm('Passer le tutoriel et commencer au niveau 1 ?')) send({ t: 'skip' }); });
+  else { const n = document.createElement('span'); n.textContent = 'Le chef de room peut passer le tutoriel.'; row.append(n); }
+  box.append(row);
+  box.classList.add('on');
+  tut.at = cur.stage && cur.stage.at ? cur.stage.at : cur.end ? [27, 8] : null;
 }
 
-// Conseils dessinés dans le niveau : un petit panneau de texte, pré-rendu une fois
-function makeTipSprite(tip) {
-  const f = '700 11px Nunito, sans-serif';
-  const w = tip.w || 150;
-  const m = document.createElement('canvas').getContext('2d');
-  m.font = f;
-  const lines = [];
-  let cur = '';
-  String(tip.text).split(' ').forEach((word) => {
-    const t = cur ? `${cur} ${word}` : word;
-    if (m.measureText(t).width > w - 16 && cur) { lines.push(cur); cur = word; } else cur = t;
-  });
-  if (cur) lines.push(cur);
-  const h = lines.length * 14 + 12;
-  const tail = 7;
-  const cv = document.createElement('canvas');
-  cv.width = Math.ceil((w + 4) * RES);
-  cv.height = Math.ceil((h + tail + 4) * RES);
-  const g = cv.getContext('2d');
-  g.scale(RES, RES);
-  g.translate(2, 2);
-  g.beginPath();
-  const r = 8;
-  g.moveTo(r, 0); g.arcTo(w, 0, w, h, r); g.arcTo(w, h, w / 2 + 6, h, r);
-  g.lineTo(w / 2 + 6, h); g.lineTo(w / 2, h + tail); g.lineTo(w / 2 - 6, h);
-  g.arcTo(0, h, 0, 0, r); g.arcTo(0, 0, w, 0, r); g.closePath();
-  g.fillStyle = 'rgba(255, 247, 226, .96)';
-  g.fill();
-  g.lineWidth = 2; g.strokeStyle = '#1d1a3b'; g.lineJoin = 'round'; g.stroke();
-  g.font = f; g.fillStyle = '#1d1a3b'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  lines.forEach((ln, i) => g.fillText(ln, w / 2, 8 + i * 14 + 6));
-  const cx = tip.tx * level.tile + level.tile / 2;
-  return { cv, w: w + 4, h: h + tail + 4, x: Math.min(Math.max(cx - w / 2, 4), LW - w - 6) - 2, y: tip.ty * level.tile - h / 2 - 2 };
-}
-function drawTips(fr) {
-  level.tipSprites.forEach((t, i) => {
-    ctx.drawImage(t.cv, t.x, t.y + Math.sin(fr / 38 + i * 1.7) * 1.6, t.w, t.h);
-  });
+// Une flèche qui rebondit montre l'endroit de la consigne en cours (pas de texte dans le jeu : tout est dans la bulle du haut)
+function drawTutMarker(fr) {
+  if (!tut.at || !$('tut-step').classList.contains('on')) return;
+  const T = level.tile;
+  const x = tut.at[0] * T + T / 2;
+  const y = tut.at[1] * T - 6 + Math.sin(fr / 9) * 4;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x - 9, y - 14); ctx.lineTo(x + 9, y - 14); ctx.lineTo(x, y);
+  ctx.closePath();
+  ctx.fillStyle = '#ffd24a'; ctx.fill();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = '#1d1a3b'; ctx.lineJoin = 'round'; ctx.stroke();
+  ctx.restore();
 }
 
-// Visite de l'interface : des bulles qui montrent chaque affichage, une par une
-const COACH_ALL = [
-  { sel: '#hud-level', text: 'En haut : le chapitre, le numéro du niveau et son nom. Les niveaux de la partie sont chronométrés (le chrono s’affiche ici, au milieu).' },
-  { sel: '#hud-keys', text: 'Les clés du niveau : il faut les ramasser toutes pour ouvrir la porte. Ton nombre de chutes s’affiche aussi ici.' },
-  { sel: '#hud-ping', text: 'Ton ping : le délai avec le serveur, en millisecondes. Plus il est bas, plus le jeu est fluide.' },
-  { sel: '#actionbar', text: 'Tes sorts, selon ton rôle (Mage ou Archer) : clique sur un sort pour l’armer, puis clique dans le jeu pour viser. La jauge montre la recharge. Raccourcis : 1, 2, 3.' },
-  { sel: '#teambar', text: 'Ici : échanger les rôles avec ton coéquipier (T), porter/lancer (F) et les emotes (G, M, J) pour parler sans micro.' },
-  { sel: '#level-hint', text: 'L’indice du niveau est masqué : touche I. Le consulter compte comme une aide (la médaille « sans indice » est perdue pour tout le duo).' },
-  { sel: '#audio-ctl', text: 'Records et Étoiles (tes meilleurs temps et les étoiles cachées), la musique et son volume, le fantôme de ta meilleure partie (👻) et le son (touche P).' },
-  { sel: '#tut-book', text: 'Le carnet des touches : chaque touche essayée est cochée. Quand vous avez tout coché tous les deux, la grille finale s’ouvre. Le chef de room peut passer le tutoriel.' },
-];
+// Visite de l'interface : une bulle à la fois, avec le « Suivant » (« Passer la visite » les saute toutes)
 function coachEl(sel) {
   const el = document.querySelector(sel);
   if (!el) return null;
   const r = el.getBoundingClientRect();
   return r.width > 4 && r.height > 4 ? { el, r } : null;
 }
-function coachShow(i) {
-  const st = coach.steps[i];
-  if (!st) return coachEnd();
-  coach.i = i;
-  let t = coachEl(st.sel);
-  if (!t) return coachShow(i + 1);
-  if (t.r.top < 0 || t.r.bottom > innerHeight) { t.el.scrollIntoView({ block: 'center' }); t = coachEl(st.sel) || t; }
+function coachShow() {
+  const stages = tutTourStages();
+  const st = stages[tut.tour];
+  if (!st) return coachEnd(true);
+  let t = coachEl(st.tour);
+  if (!t) { tut.tour++; return coachShow(); }
+  if (t.r.top < 0 || t.r.bottom > innerHeight) { t.el.scrollIntoView({ block: 'center' }); t = coachEl(st.tour) || t; }
   const r = t.r;
   const hl = $('coach-hl');
   hl.style.left = `${r.left - 5}px`; hl.style.top = `${r.top - 5}px`;
   hl.style.width = `${r.width + 10}px`; hl.style.height = `${r.height + 10}px`;
   const b = $('coach-bubble');
-  b.querySelector('.cb-step').textContent = `Visite de l’interface · ${i + 1}/${coach.steps.length}`;
+  b.querySelector('.cb-step').textContent = `Visite de l’interface · ${tut.tour + 1}/${stages.length}`;
   b.querySelector('p').textContent = st.text;
-  $('coach-next').textContent = i === coach.steps.length - 1 ? 'Compris !' : 'Suivant ›';
+  $('coach-next').textContent = tut.tour === stages.length - 1 ? 'Compris, on joue !' : 'Suivant ›';
   const bh = b.offsetHeight;
   const below = r.bottom + 16 + bh < innerHeight;
   b.style.top = `${Math.max(8, below ? r.bottom + 16 : r.top - 16 - bh)}px`;
   b.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - b.offsetWidth / 2), innerWidth - b.offsetWidth - 8)}px`;
+  $('tut-step').classList.remove('on');
 }
-function coachStart() {
-  if (!tutOn()) return;
-  clearTimeout(coach.timer);
-  coach.steps = COACH_ALL.filter((x) => x.sel !== '#hud-keys' || level.keys.length);
-  coach.seen = true;
-  $('coach').classList.add('on');
-  coachShow(0);
-}
-function coachEnd() {
-  clearTimeout(coach.timer);
-  coach.i = -1;
+function coachEnd(finished) {
+  clearTimeout(tut.timer);
+  tut.tourOn = false;
+  if (finished === true || finished === undefined) tut.tour = tutTourStages().length; // « passer » = tout sauter
   $('coach').classList.remove('on');
+  renderTutStep();
 }
-$('coach-next').onclick = () => coachShow(coach.i + 1);
-$('coach-skip').onclick = coachEnd;
-window.addEventListener('resize', () => { if (coach.i >= 0) coachShow(coach.i); });
+function tutTourStart(again) {
+  if (!tutOn()) return;
+  clearTimeout(tut.timer);
+  tut.tour = 0;
+  tut.tourOn = true;
+  tut.seen = true;
+  $('coach').classList.add('on');
+  if (again) $('tut-step').classList.remove('on');
+  coachShow();
+}
+$('coach-next').onclick = () => { tut.tour++; coachShow(); };
+$('coach-skip').onclick = () => coachEnd(true);
+window.addEventListener('resize', () => { if (tut.tourOn) coachShow(); });
 
-// Début d'un niveau : on affiche (ou on masque) le carnet, et on lance la visite une seule fois
+// Début d'un niveau : la visite démarre toute seule (une fois), puis une consigne à la fois
 function tutorialUi() {
-  coachEnd();
-  if (!tutOn()) { $('tut-book').classList.remove('on'); return; }
-  renderTutBook();
-  if (!coach.seen) coach.timer = setTimeout(coachStart, 5600);
+  clearTimeout(tut.timer);
+  tut.tourOn = false;
+  $('coach').classList.remove('on');
+  if (!tutOn()) { $('tut-step').classList.remove('on'); return; }
+  if (tut.seen) { tut.tour = tutTourStages().length; renderTutStep(); return; }
+  tut.tour = 0;
+  $('tut-step').classList.remove('on');
+  tut.timer = setTimeout(() => tutTourStart(false), 5600); // après la carte du chapitre
 }
 
 /* ---------- Choix de l'apparence ---------- */
@@ -3748,7 +3767,7 @@ function draw() {
 
   if (level.cfg.link) drawTether();
 
-  if (level.tipSprites && level.tipSprites.length) drawTips(frame);
+  if (tutOn()) drawTutMarker(frame);
   Ghost.draw(); // derrière les vrais joueurs
   // ombres puis joueurs (le tien passe devant)
   const order = players.slice().sort((a, b) => (a.id === myId) - (b.id === myId));
