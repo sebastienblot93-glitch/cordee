@@ -768,6 +768,7 @@ function applyState(msg) {
       sprites.set(id, (s = {
         x, y, tx: x, ty: y, fx: x, fy: y, py: y, face, vy: 0, air: false, mv: false, t: Math.random() * 100,
         walk: 0, land: 0, pop: 14, castT: 0, castAng: 0, castKind: '', dashT: 0, lx: 0, ly: 0,
+        px: x, vx: 0, spdSlow: 0, spdFast: 0, vyS: 0, gr: true, airK: 0, dashK: 0, stride: 0, brake: 0, spd: 0, sq: 0, sqV: 0, peak: 0, dirS: face || 1, wasGr: true,
       }));
       sparks(x + PW / 2, y + PH / 2, '#ffffff', 6, 2.4, 26);
     }
@@ -775,7 +776,7 @@ function applyState(msg) {
     const dx = x - s.fx;
     if (Math.hypot(dx, dy) > 70) {
       // téléportation (retour au checkpoint, échange) : on réapparaît d'un coup, avec un petit effet
-      s.x = x; s.y = y; s.py = y; s.pop = 12;
+      s.x = x; s.y = y; s.py = y; s.px = x; s.vx = 0; s.vyS = 0; s.pop = 12;
       sparks(x + PW / 2, y + PH / 2, '#ffffff', 6, 2.8, 26);
       flash(x + PW / 2, y + PH / 2, '#ffffff', 44, 10);
     } else {
@@ -2145,6 +2146,8 @@ function setKey(e, down) {
   if (down && k === 'jump' && !e.repeat) {
     jumpPresses++;
     changed = true;
+    const me = sprites.get(myId);
+    if (me && me.gr && level && world && world.status === 'playing') me.sqV += 0.07; // on se ramasse tout de suite (sans attendre le serveur), puis on se détend dans le saut
   }
   if (input[k] !== down) {
     input[k] = down;
@@ -3261,12 +3264,51 @@ function drawShadow(s) {
 }
 
 // Fait évoluer l'animation d'un joueur (appelé une fois par image)
+// Le personnage est-il posé (sol, glace, tête de l'autre joueur) ? Sert à l'animation : pas de pose « en l'air » parasite au sommet du saut.
+function isGrounded(s) {
+  if (Phys.hitsTile(level.L, s.tx, s.ty + 1)) return true;
+  for (const o of sprites.values()) {
+    if (o !== s && Math.abs(o.ty - (s.ty + PH)) <= 1.6 && Math.abs(o.tx - s.tx) < PW - 2) return true;
+  }
+  return false;
+}
+
 function stepSprite(s, p) {
   s.py = s.y;
-  s.x += (s.tx - s.x) * 0.6; // lissage entre deux mises à jour serveur
-  s.y += (s.ty - s.y) * 0.6;
-  const walking = s.mv && !s.air;
-  s.walk += ((walking ? 1 : 0) - s.walk) * 0.25;
+  s.x += (s.tx - s.x) * sm(0.6); // lissage entre deux mises à jour serveur
+  s.y += (s.ty - s.y) * sm(0.6);
+
+  // --- animation : tout est lissé, rien ne « claque » d'une pose à l'autre ---
+  const dxf = Math.max(-12, Math.min(12, (s.x - s.px) / frameDt)); // pixels par 1/60 s, quelle que soit la cadence d'affichage
+  const dyf = Math.max(-16, Math.min(16, (s.y - s.py) / frameDt));
+  s.px = s.x;
+  s.vx += (dxf - s.vx) * sm(0.3);
+  s.vyS += (dyf - s.vyS) * sm(0.3);
+  const spd = Math.abs(s.vx);
+  s.spdSlow += (Math.abs(dxf) - s.spdSlow) * sm(0.1);
+  s.spdFast += (Math.abs(dxf) - s.spdFast) * sm(0.5);
+  const braking = s.gr && s.spdSlow > 2.2 && s.spdFast < s.spdSlow * 0.42; // on était bien lancé et on s'arrête net
+  s.gr = isGrounded(s);
+  if (s.gr && !s.wasGr) { // atterrissage : écrasement proportionnel à la chute, qui rebondit comme un ressort
+    s.sqV += Math.max(0.035, Math.min(0.2, s.peak * 0.016));
+    s.peak = 0;
+  } else if (!s.gr && s.wasGr && s.vyS < -1) { // impulsion : petit étirement au décollage
+    s.sqV -= 0.05;
+  }
+  s.wasGr = s.gr;
+  if (!s.gr) s.peak = Math.max(s.peak, s.vyS);
+  for (let i = Math.max(1, Math.round(frameDt)); i > 0; i--) { // ressort d'écrasement (pas fixes, stable même si une image est longue)
+    s.sqV += -0.32 * s.sq - 0.13 * s.sqV;
+    s.sq += s.sqV;
+  }
+  const runT = s.gr ? Math.max(0, Math.min(1, (spd - 0.4) / 1.8)) : 0;
+  s.walk += (runT - s.walk) * sm(runT > s.walk ? 0.25 : 0.18);
+  s.stride += s.walk * (0.3 + 0.07 * s.walk) * frameDt;
+  s.airK += ((s.gr ? 0 : 1) - s.airK) * sm(s.gr ? 0.35 : 0.5);
+  s.dashK += ((s.dashT > 0 ? 1 : 0) - s.dashK) * sm(0.4);
+  s.brake += ((braking ? 1 : 0) - s.brake) * sm(braking ? 0.6 : 0.16);
+  if (s.brake > 0.5 && (frame & 3) === 0) dust(s.x + PW / 2 - (s.face || 1) * 6, s.y + PH, 1); // petite poussière de dérapage
+  const walking = s.walk > 0.15;
   if (s.land > 0) s.land--;
   if (s.pop > 0) s.pop--;
   if (s.castT > 0) s.castT--;
@@ -3278,7 +3320,11 @@ function stepSprite(s, p) {
     }
   }
   // petits pas de poussière en marchant
-  if (walking && (frame + Math.floor(s.t)) % 10 === 0) dust(s.x + PW / 2 - (s.face || 1) * 4, s.y + PH, 1);
+  const stepNo = Math.floor(s.stride / Math.PI); // un nuage à chaque pied qui se pose
+  if (stepNo !== s.stepNo) {
+    s.stepNo = stepNo;
+    if (walking && s.walk > 0.6) dust(s.x + PW / 2 - (s.face || 1) * 5, s.y + PH, 1);
+  }
   // le regard suit la souris (soi) ou le coéquipier le plus proche
   let tx = 0;
   let ty = 0;
@@ -3293,8 +3339,8 @@ function stepSprite(s, p) {
       if (d < bd) { bd = d; tx = Math.max(-1, Math.min(1, (o.x - s.x) / 60)); ty = Math.max(-1, Math.min(1, (o.y - s.y) / 60)); }
     });
   }
-  s.lx += (tx - s.lx) * 0.15;
-  s.ly += (ty - s.ly) * 0.15;
+  s.lx += (tx - s.lx) * sm(0.15);
+  s.ly += (ty - s.ly) * sm(0.15);
 }
 
 
@@ -3441,24 +3487,21 @@ function drawPlayer(p, s, frame) {
   const casting = s.castT > 0;
   const dir = casting && Math.abs(Math.cos(s.castAng)) > 0.25 ? Math.sign(Math.cos(s.castAng)) : (s.face || 1);
   const vy = s.y - s.py;
-  // étirement en saut, écrasement à l'arrivée, apparition en "pop"
+  // retournement progressif (2-3 images), puis étirement en saut, écrasement à l'arrivée (ressort), apparition en "pop"
+  s.dirS += (dir - s.dirS) * 0.4;
   let sx = 1;
   let sy = 1;
-  const stretch = Math.max(-0.1, Math.min(0.16, -vy * 0.012));
-  sy += stretch;
-  sx -= stretch * 0.5;
-  if (s.land > 0) {
-    const k = Math.sin((s.land / 9) * Math.PI) * 0.2;
-    sy -= k;
-    sx += k * 0.8;
-  }
+  const stretch = Math.max(-0.08, Math.min(0.14, -s.vyS * 0.011)) * s.airK;
+  sy += stretch - s.sq;
+  sx += s.sq * 0.7 - stretch * 0.5;
   if (s.pop > 0) {
     const k = Math.max(0.05, easeOutBack(1 - s.pop / 14));
     sx *= k;
     sy *= k;
   }
   const o = {
-    dir, color: p.color, t: frame + s.t, kit, walk: s.walk, air: s.air, vy, dash: s.dashT > 0,
+    dir: Math.abs(s.dirS - dir) < 0.08 ? dir : s.dirS, color: p.color, t: frame + s.t, kit, walk: s.walk, air: !s.gr, vy: s.vyS, dash: s.dashT > 0,
+    stride: s.stride, airK: s.airK, dashK: s.dashK, brake: s.brake,
     look: { x: s.lx * dir, y: s.ly },
     cast: casting ? { ang: s.castAng, k: s.castT / 14 } : null,
   };
@@ -3613,6 +3656,9 @@ function governQuality(now) {
 // ou presque : deux fois moins de travail pour la carte graphique, et des mouvements identiques partout.
 let nextDue = 0;
 let vigW = 0;
+let lastDrawT = 0;
+let frameDt = 1; // durée de l'image en « images à 60 i/s » : l'animation reste la même vitesse même si le jeu ramasse un peu
+const sm = (k) => 1 - Math.pow(1 - k, frameDt); // lissage indépendant du rythme d'affichage
 const diag = { on: false, fps: 0, ms: 0, worst: 0, gap: 0, n: 0, acc: 0, since: 0, lastMsg: 0, gapMax: 0, el: null };
 function diagTick(t, cost) {
   diag.n++; diag.acc += cost;
@@ -3632,6 +3678,8 @@ function draw() {
   const t0 = performance.now();
   if (t0 < nextDue - 1.5) return;
   nextDue = Math.max(nextDue + 1000 / 60, t0 - 8);
+  frameDt = lastDrawT ? Math.max(0.5, Math.min(3, (t0 - lastDrawT) / (1000 / 60))) : 1;
+  lastDrawT = t0;
   drawPreview();
   if (!level || !world) return;
   frame++;
