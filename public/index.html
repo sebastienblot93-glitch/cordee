@@ -65,6 +65,7 @@
     .dot { width: 18px; height: 22px; border-radius: 3px; flex: none; }
     .tag { color: var(--muted); font-size: .85rem; }
 
+    #vig { position: absolute; inset: 0; pointer-events: none; }
     #game-wrap { position: relative; width: min(960px, 96vw); overflow: hidden; background: #0d0d26; border-radius: 10px; box-shadow: 0 0 0 3px var(--accent), 0 0 24px -4px var(--accent); transition: box-shadow .8s; }
     canvas { width: 100%; height: auto; display: block; background: #0d0d26; border-radius: 6px; image-rendering: auto; will-change: transform; }
     #boss-hud { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: min(540px, 74%); display: none; pointer-events: none; z-index: 3; font-family: 'Silkscreen', monospace; text-shadow: 0 2px 4px #000; }
@@ -440,6 +441,7 @@
     <div id="hud"><span id="hud-level"></span><span id="hud-timer"></span><span id="hud-keys"></span><span style="display:flex;gap:.7rem;align-items:center"><span id="hud-ping" style="color:var(--muted);font-size:.8rem"></span></span></div>
     <div id="game-wrap">
       <canvas id="canvas"></canvas>
+      <div id="vig"></div>
       <div id="banner">Niveau réussi !</div>
       <div id="toast"></div>
       <div id="boss-hud">
