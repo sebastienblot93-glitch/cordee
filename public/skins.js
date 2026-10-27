@@ -2,7 +2,8 @@
 // qui marche, saute, retombe, fait un dash et lance ses sorts.
 // Chaque skin se dessine dans la hitbox du jeu (24 x 28 pixels, les pieds en bas) et peut dépasser en hauteur.
 // Skins.draw(ctx, id, x, y, o) : (x, y) = coin haut-gauche de la hitbox.
-//   o : { dir, color, t, kit, walk (0..1), air, vy, dash, cast: {ang, k}, look: {x, y} }
+//   o : { dir, color, t, kit, walk (0..1), air, vy, dash, cast: {ang, k}, look: {x, y},
+//         stride (phase de foulée), airK / dashK (0..1, lissés), brake (0..1) }  -- les derniers champs sont facultatifs
 (function () {
   const W = 24;
   const H = 28;
@@ -73,17 +74,34 @@
   }
   // Membre à deux segments (le point de contrôle fait plier le genou ou le coude)
   function limb(g, ax, ay, kx, ky, bx, by, wd, fill) {
+    const path = (dx, dy) => {
+      g.beginPath();
+      g.moveTo(ax + dx, ay + dy);
+      g.quadraticCurveTo(kx + dx, ky + dy, bx + dx, by + dy);
+    };
     g.lineCap = 'round';
     g.lineJoin = 'round';
-    g.beginPath();
-    g.moveTo(ax, ay);
-    g.quadraticCurveTo(kx, ky, bx, by);
+    path(0, 0);
     g.strokeStyle = OUT;
     g.lineWidth = wd + 3.2;
     g.stroke();
     g.strokeStyle = fill;
     g.lineWidth = wd;
     g.stroke();
+    // volume : ombre sous le membre, reflet fin dessus
+    if (typeof fill === 'string') {
+      g.globalAlpha = 0.45;
+      g.strokeStyle = shade(fill, -0.24);
+      g.lineWidth = wd * 0.4;
+      path(0.55, 0.95);
+      g.stroke();
+      g.globalAlpha = 0.4;
+      g.strokeStyle = shade(fill, 0.42);
+      g.lineWidth = wd * 0.24;
+      path(-0.6, -0.75);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
   }
   function tri(g, x0, y0, x1, y1, x2, y2, fill, lw) {
     g.beginPath();
@@ -123,83 +141,172 @@
   }
 
   /* ---------- Pose : tout vient de la vitesse, de l'air, du dash et du lancer de sort ---------- */
+  // Les poses (repos, course, saut, chute, dash, freinage) sont mélangées en continu : jamais de « claquement » d'une pose à l'autre.
+  // Jambes et bras sont résolus par cinématique inverse : les genoux et les coudes plient là où ils doivent.
   const HX = 0.8; // centre de la tête
   const HY = -27.4;
   const GY = -2.5; // centre d'un pied posé au sol
+  const HIP_Y = -9.5;
+  const SH_Y = -19.4;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const sstep = (k) => { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); };
+  const frac = (v) => v - Math.floor(v);
+
+  // Membre à deux segments : renvoie le point de contrôle de la courbe qui passe par le genou / le coude.
+  // bend = +1 : le joint plie vers l'avant (genou), -1 : vers l'arrière (coude).
+  function ik2(ax, ay, bx, by, l1, l2, bend) {
+    let dx = bx - ax;
+    let dy = by - ay;
+    let d = Math.hypot(dx, dy) || 0.001;
+    const maxd = l1 + l2 - 0.15;
+    if (d > maxd) {
+      bx = ax + (dx * maxd) / d;
+      by = ay + (dy * maxd) / d;
+      dx = bx - ax;
+      dy = by - ay;
+      d = maxd;
+    }
+    const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+    const ux = dx / d;
+    const uy = dy / d;
+    const jx = ax + ux * a + uy * bend * h;
+    const jy = ay + uy * a - ux * bend * h;
+    return { kx: 2 * jx - (ax + bx) / 2, ky: 2 * jy - (ay + by) / 2, bx, by };
+  }
+
+  // Un pied pendant la course : u = 0..1 (un cycle complet). Appui puis phase aérienne, comme un vrai coureur.
+  function runFoot(u) {
+    const duty = 0.46;
+    if (u < duty) {
+      const s = u / duty;
+      return { x: lerp(5.4, -5.8, s), lift: 0 };
+    }
+    const s = (u - duty) / (1 - duty);
+    return { x: lerp(-5.8, 5.4, sstep(s * 1.05)), lift: Math.sin(Math.PI * Math.pow(s, 0.72)) * 6.4 };
+  }
+
+  const POSE_KEYS = ['bob', 'lean', 'head', 'fbx', 'fby', 'ffx', 'ffy', 'hbx', 'hby', 'hfx', 'hfy'];
+  function mixPose(a, b, k) {
+    if (k <= 0) return a;
+    if (k >= 1) return b;
+    const r = {};
+    for (const key of POSE_KEYS) r[key] = lerp(a[key], b[key], k);
+    return r;
+  }
 
   function poseOf(o) {
     const t = o.t;
-    const walk = Math.min(1, o.walk);
-    const P = { t, walk, air: o.air, up: o.vy < 0, dash: o.dash, ph: t * 0.34, kit: o.kit };
-    const s = Math.sin(P.ph);
-    const c = Math.cos(P.ph);
-    P.bob = o.air ? 0 : walk > 0.05 ? -Math.abs(c) * 1.9 * walk : Math.sin(t * 0.07) * 0.55;
-    P.lean = o.dash ? 0.42 : walk * 0.08 + (o.air ? (P.up ? -0.07 : 0.09) : 0);
+    const run = clamp(o.walk || 0, 0, 1);
+    const airK = o.airK !== undefined ? o.airK : o.air ? 1 : 0;
+    const dashK = o.dashK !== undefined ? o.dashK : o.dash ? 1 : 0;
+    const brake = clamp(o.brake || 0, 0, 1);
+    const stride = o.stride !== undefined ? o.stride : t * 0.34;
+    const vy = o.vy || 0;
+    const P = { t, walk: run, air: airK > 0.5, up: vy < 0, dash: dashK > 0.5, ph: stride, kit: o.kit, airK, dashK };
+    const u = frac(stride / TAU);
 
-    // jambes : [arrière, avant]
-    const hipY = -9.5;
-    let b;
-    let f;
-    if (o.dash) {
-      b = { fx: -12, fy: -8.5 };
-      f = { fx: -4.5, fy: -3.5 };
-    } else if (o.air) {
-      const fl = Math.sin(t * 0.5) * 0.7;
-      if (P.up) {
-        b = { fx: -4.5, fy: -5.5 + fl };
-        f = { fx: 5.5, fy: -8.2 + fl };
-      } else {
-        b = { fx: -5.8, fy: -4.2 + fl };
-        f = { fx: 5.8, fy: -5.4 - fl };
-      }
-    } else if (walk > 0.05) {
-      f = { fx: 3.4 + s * 6.2 * walk, fy: GY - Math.max(0, c) * 3.8 * walk };
-      b = { fx: -3.4 - s * 6.2 * walk, fy: GY - Math.max(0, -c) * 3.8 * walk };
-    } else {
-      b = { fx: -3.7, fy: GY };
-      f = { fx: 3.7, fy: GY };
-    }
-    const mk = (hx, e) => ({ hx, hy: hipY, fx: e.fx, fy: e.fy, kx: (hx + e.fx) / 2 + 2.4, ky: (hipY + e.fy) / 2 });
-    P.legs = [mk(-3.4, b), mk(3.4, f)];
+    // --- repos : respiration, petit balancement du poids ---
+    const br = Math.sin(t * 0.07);
+    const sway = Math.sin(t * 0.021);
+    const idle = {
+      bob: br * 0.4, lean: sway * 0.018, head: sway * 0.03 - br * 0.01,
+      fbx: -3.9, fby: GY, ffx: 3.9, ffy: GY,
+      hbx: -8.2 + sway * 0.3, hby: -11.6 + br * 0.45, hfx: 8.2 - sway * 0.3, hfy: -11.6 + br * 0.45,
+    };
 
-    // bras : [arrière, avant]
-    const shy = -19.4;
-    let ab;
-    let af;
-    if (o.dash) {
-      ab = [-9.5, -16.5];
-      af = [-3.5, -17.5];
-    } else if (o.air) {
-      const fl = Math.sin(t * 0.6) * 1.2;
-      if (P.up) {
-        ab = [-9.5, -27 + fl];
-        af = [10.5, -27.5 - fl];
-      } else {
-        ab = [-11, -20.5 + fl];
-        af = [12, -21.5 - fl];
-      }
-    } else if (walk > 0.05) {
-      ab = [-7.8 + s * 5.6 * walk, -11.8 - Math.abs(c) * 1.4 * walk];
-      af = [7.8 - s * 5.6 * walk, -11.8 - Math.abs(c) * 1.4 * walk];
-    } else {
-      const br = Math.sin(t * 0.07) * 0.5;
-      ab = [-8.4, -11.4 + br];
-      af = [8.4, -11.4 + br];
+    // --- course ---
+    const ff = runFoot(u);
+    const fb = runFoot(frac(u + 0.5));
+    const fw = ff.x / 5.2; // -1..1 : le pied avant est-il loin devant ?
+    const hand = (f) => ({ x: 6.8 + 6.4 * f, y: lerp(-10.2, -17.4, sstep((f + 0.15) / 1.15)) });
+    const hB = hand(fw);
+    const hF = hand(-fw);
+    const runPose = {
+      bob: -2.1 * (0.5 - 0.5 * Math.cos(4 * Math.PI * (u - 0.23))),
+      lean: 0.17 + 0.03 * Math.sin(2 * stride),
+      head: -0.05 + 0.04 * Math.cos(4 * Math.PI * (u - 0.23)),
+      fbx: fb.x, fby: GY - fb.lift, ffx: ff.x, ffy: GY - ff.lift,
+      hbx: hB.x - 11, hby: hB.y, hfx: hF.x + 1.2, hfy: hF.y,
+    };
+    let ground = mixPose(idle, runPose, run);
+
+    // --- freinage : on se penche en arrière, le pied avant se plante ---
+    if (brake > 0.02) {
+      const bk = {
+        bob: 0.6, lean: -0.13, head: 0.08,
+        fbx: -2.4, fby: GY - 0.8, ffx: 7.2, ffy: GY,
+        hbx: -10.2, hby: -15.5, hfx: 11.2, hfy: -16.5,
+      };
+      ground = mixPose(ground, bk, brake * (1 - airK));
     }
+
+    // --- saut / chute : suit la vitesse verticale, donc continu jusqu'au sommet ---
+    const m = clamp((vy + 5.5) / 11, 0, 1); // 0 = monte vite, 0.5 = sommet, 1 = tombe vite
+    const fl = Math.sin(t * 0.45) * 0.6;
+    const rise = {
+      bob: 0, lean: 0.05, head: -0.06,
+      fbx: -4.8, fby: -5.0 + fl, ffx: 5.6, ffy: -8.6 - fl,
+      hbx: -12, hby: -26, hfx: 13.6, hfy: -25.4,
+    };
+    const apex = {
+      bob: 0, lean: 0, head: 0,
+      fbx: -3.8, fby: -6.6 + fl, ffx: 4.6, ffy: -7.6 - fl,
+      hbx: -12.4, hby: -21, hfx: 13.8, hfy: -21.6,
+    };
+    const fall = {
+      bob: 0, lean: -0.06, head: 0.05,
+      fbx: -5.6, fby: -3.4 + fl, ffx: 5.8, ffy: -4.4 - fl,
+      hbx: -12.4, hby: -17.8 + fl, hfx: 14, hfy: -18.6 - fl,
+    };
+    const air = m < 0.5 ? mixPose(rise, apex, sstep(m * 2)) : mixPose(apex, fall, sstep((m - 0.5) * 2));
+
+    // --- dash ---
+    const dash = {
+      bob: 0, lean: 0.42, head: -0.25,
+      fbx: -12, fby: -8.5, ffx: -4.5, ffy: -3.5,
+      hbx: -9.5, hby: -16.5, hfx: -3.5, hfy: -17.5,
+    };
+
+    let pose = mixPose(ground, air, airK);
+    pose = mixPose(pose, dash, dashK);
+    P.bob = pose.bob;
+    P.lean = pose.lean;
+    P.headRot = pose.head;
+    P.headDy = -0.35 * run * Math.sin(4 * Math.PI * (u - 0.23)) * (1 - airK);
+
+    // jambes : hanches suivent le bassin (bob), le pied est défini dans l'espace du sol
+    const hipY = HIP_Y + pose.bob;
+    const leg = (hx, fx, fy) => {
+      const j = ik2(hx, hipY, fx, fy, 4.7, 4.7, 1);
+      return { hx, hy: hipY, kx: j.kx, ky: j.ky, fx: j.bx, fy: j.by };
+    };
+    P.legs = [leg(-2.9, pose.fbx, pose.fby), leg(2.9, pose.ffx, pose.ffy)];
+
+    // bras
+    let hfx = pose.hfx;
+    let hfy = pose.hfy;
     P.castAng = null;
     if (o.cast) {
       const a = o.cast.ang;
       const k = o.cast.k; // 1 au début du geste, 0 à la fin
       const len = 10.5 - k * 2.2; // petit recul au départ
-      af = [6.9 + Math.cos(a) * len, shy + Math.sin(a) * len];
+      hfx = 6.9 + Math.cos(a) * len;
+      hfy = SH_Y + Math.sin(a) * len;
       P.castAng = a;
       P.castK = k;
     }
-    const mkA = (side, h) => {
+    const arm = (side, hx, hy) => {
       const sx = side * 6.9;
-      return { sx, sy: shy, hx: h[0], hy: h[1], kx: (sx + h[0]) / 2 + side * 1.8, ky: (shy + h[1]) / 2 + 1.2 };
+      const j = ik2(sx, SH_Y, hx, hy, 4.3, 4.3, -1);
+      return { sx, sy: SH_Y, hx: j.bx, hy: j.by, kx: j.kx, ky: j.ky };
     };
-    P.arms = [mkA(-1, ab), mkA(1, af)];
+    P.arms = [arm(-1, pose.hbx, pose.hby), arm(1, hfx, hfy)];
+
+    // expression : sourcils selon l'action
+    P.brow = dashK > 0.5 ? -1 : o.cast ? -0.45 : airK > 0.5 ? (vy < -1 ? 0.8 : vy > 2 ? 0.55 : 0.3) : brake > 0.4 ? 0.7 : 0;
+    P.pant = run > 0.7 && airK < 0.3; // essoufflé : la bouche s'ouvre un peu en courant
     return P;
   }
 
@@ -234,6 +341,22 @@
         g.fill();
       }
     });
+    if (!opt.slit && !opt.noBrows) { // sourcils : colère en dash, étonnement en l'air, concentration en lançant un sort
+      const bw = P.brow || 0;
+      g.strokeStyle = 'rgba(29,26,59,.82)';
+      g.lineWidth = 1.35;
+      g.lineCap = 'round';
+      [HX + 0.4, HX + 5.8].forEach((ex, i) => {
+        const innerDy = -bw * 1.7;
+        const by = ey - 5.4 - Math.max(0, bw) * 0.9;
+        const yl = by + (i === 0 ? 0 : innerDy);
+        const yr = by + (i === 0 ? innerDy : 0);
+        g.beginPath();
+        g.moveTo(ex - 2.1, yl);
+        g.lineTo(ex + 2.1, yr);
+        g.stroke();
+      });
+    }
     if (!opt.noBlush) {
       g.fillStyle = 'rgba(255,110,130,.34)';
       g.beginPath();
@@ -248,6 +371,8 @@
         g.beginPath();
         g.ellipse(HX + 4, HY + 6.3, 1.1, 0.8, 0, 0, TAU);
         g.fill();
+      } else if (P.pant) { // on court : la bouche s'ouvre et se ferme avec la foulée
+        ell(g, HX + 4, HY + 5.2, 1.5, 0.9 + 0.7 * (0.5 + 0.5 * Math.sin(2 * P.ph)), '#5a1f33', 1);
       } else {
         g.strokeStyle = OUT;
         g.lineWidth = 1.3;
@@ -1482,10 +1607,21 @@
 
   function drawLeg(g, L, S, C, color, shoe) {
     limb(g, L.hx, L.hy, L.kx, L.ky, L.fx, L.fy, S.legW || 4.7, color);
+    // le pied pivote : orteils vers le bas quand il est levé derrière, vers le haut quand il se tend devant
+    const up = Math.max(0, -2.5 - L.fy);
+    const rot = L.fx < L.hx + 1 ? Math.min(0.9, up * 0.11) : -Math.min(0.5, up * 0.06);
+    g.save();
+    g.translate(L.fx + 1.9, L.fy - 0.1);
+    g.rotate(rot);
     g.beginPath();
-    g.ellipse(L.fx + 1.9, L.fy - 0.1, 4.2, 2.7, 0, 0, TAU);
+    g.ellipse(0, 0, 4.2, 2.7, 0, 0, TAU);
     paint(g, shoe, 1.3);
-    shine(g, L.fx + 0.6, L.fy - 1.2, 1.8, 0.8, 0, 0.3);
+    g.fillStyle = 'rgba(0,0,0,.26)'; // semelle
+    g.beginPath();
+    g.ellipse(0, 1.25, 3.6, 0.95, 0, 0, TAU);
+    g.fill();
+    shine(g, -1.3, -1.1, 1.8, 0.8, 0, 0.3);
+    g.restore();
   }
 
   function drawArm(g, A, S, o, C, hand) {
@@ -1526,10 +1662,32 @@
       rr(g, -6.6, -21.2, 13.2, 12.4, 4.2);
       const body = S.body(o, C);
       paint(g, grad(g, 0, -21, 0, -9, shade(body, 0.16), shade(body, -0.12)), 1.6);
+      // volume : lumière à gauche, ombre à droite, ombre portée de la tête sous le menton
+      g.save();
+      rr(g, -6.6, -21.2, 13.2, 12.4, 4.2);
+      g.clip();
+      const side = g.createLinearGradient(-6.6, 0, 6.6, 0);
+      side.addColorStop(0, 'rgba(255,255,255,.16)');
+      side.addColorStop(0.5, 'rgba(255,255,255,0)');
+      side.addColorStop(1, 'rgba(0,0,40,.24)');
+      g.fillStyle = side;
+      g.fillRect(-7, -22, 14, 14);
+      const ao = g.createLinearGradient(0, -21.5, 0, -16);
+      ao.addColorStop(0, 'rgba(0,0,40,.3)');
+      ao.addColorStop(1, 'rgba(0,0,40,0)');
+      g.fillStyle = ao;
+      g.fillRect(-7, -22, 14, 6);
+      g.restore();
       shine(g, -3.6, -18.4, 2.4, 1.4, 0, 0.22);
     }
     if (S.torso) S.torso(g, P, o, C);
+    // la tête pivote autour du cou : elle reste plus horizontale que le torse penché, et suit avec un léger retard
+    g.save();
+    g.translate(HX, -18.6 + P.headDy);
+    g.rotate(P.headRot);
+    g.translate(-HX, 18.6);
     S.head(g, P, o, C);
+    g.restore();
 
     const fa = P.arms[1];
     drawArm(g, fa, S, o, C, hand);
@@ -1566,11 +1724,12 @@
       const q = {
         color: o.color || '#3b82f6', t: o.t || 0, kit: o.kit || 'plain', walk: o.walk || 0,
         air: !!o.air, vy: o.vy || 0, dash: !!o.dash, look: o.look,
+        stride: o.stride, airK: o.airK, dashK: o.dashK, brake: o.brake,
       };
-      if (o.cast) q.cast = { ang: Math.atan2(Math.sin(o.cast.ang), Math.cos(o.cast.ang) * dir), k: o.cast.k };
+      if (o.cast) q.cast = { ang: Math.atan2(Math.sin(o.cast.ang), Math.cos(o.cast.ang) * Math.sign(dir)), k: o.cast.k };
       ctx.save();
       ctx.translate(x + W / 2, y + H);
-      ctx.scale(dir, 1);
+      ctx.scale(Math.abs(dir) < 0.3 ? (dir < 0 ? -0.3 : 0.3) : dir, 1); // demi-tour : le personnage se retourne en 2-3 images
       drawHuman(ctx, q, S);
       ctx.restore();
     },
