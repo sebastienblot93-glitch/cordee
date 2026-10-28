@@ -1383,7 +1383,7 @@ function startLevel(msg) {
     rows: msg.level, tile: T, keys, door, index: msg.index, total: msg.total, name: msg.name, hint: msg.hint, chapter,
     timer: msg.timer || 0,
     diamond: msg.diamond || 0, gold: msg.gold || 0, silver: msg.silver || 0,
-    star: (L.stars && L.stars[0]) || null,
+    star: (L.stars && L.stars[0]) || null, labelSeen: new Set(),
     theme: chapter.theme,
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
@@ -2278,18 +2278,34 @@ function sparkle4(x, y, r, color) {
   ctx.fill();
 }
 
+// Symboles des séquences de cristaux : rond, triangle, carré, losange, croix (chacun a sa couleur, pour ne jamais les confondre)
+const SEQ_COLORS = ['#6ec8ff', '#ffb454', '#9be564', '#ff8fd0', '#ffe066'];
+const SEQ_NAMES = ['rond', 'triangle', 'carré', 'losange', 'croix'];
 function drawShape(kind, cx, cy, size, color) {
   ctx.fillStyle = color;
   ctx.beginPath();
-  if (kind === 0) {
+  const k = kind % 5;
+  if (k === 0) {
     ctx.arc(cx, cy, size, 0, TAU);
-  } else if (kind === 1) {
+  } else if (k === 1) {
     ctx.moveTo(cx, cy - size);
     ctx.lineTo(cx + size, cy + size * 0.8);
     ctx.lineTo(cx - size, cy + size * 0.8);
     ctx.closePath();
-  } else {
+  } else if (k === 2) {
     rrPath(cx - size * 0.85, cy - size * 0.85, size * 1.7, size * 1.7, 1.5);
+  } else if (k === 3) {
+    ctx.moveTo(cx, cy - size * 1.15);
+    ctx.lineTo(cx + size * 0.85, cy);
+    ctx.lineTo(cx, cy + size * 1.15);
+    ctx.lineTo(cx - size * 0.85, cy);
+    ctx.closePath();
+  } else {
+    const a = size * 0.38, b = size;
+    ctx.moveTo(cx - a, cy - b); ctx.lineTo(cx + a, cy - b); ctx.lineTo(cx + a, cy - a); ctx.lineTo(cx + b, cy - a);
+    ctx.lineTo(cx + b, cy + a); ctx.lineTo(cx + a, cy + a); ctx.lineTo(cx + a, cy + b); ctx.lineTo(cx - a, cy + b);
+    ctx.lineTo(cx - a, cy + a); ctx.lineTo(cx - b, cy + a); ctx.lineTo(cx - b, cy - a); ctx.lineTo(cx - a, cy - a);
+    ctx.closePath();
   }
   ctx.fill();
 }
@@ -2589,7 +2605,7 @@ function outlinedText(text, x, y, fill) {
 function drawCrystal(c, T, active, seqShape, seqDone, flash, frame) {
   const cx = c.x + T / 2;
   const cy = c.y + T / 2 + Math.sin(frame * 0.06 + c.x) * 1.8;
-  const color = seqShape >= 0 ? (flash ? '#ff5050' : seqDone ? '#9be564' : '#b79cff') : GROUP_COLORS[c.group];
+  const color = seqShape >= 0 ? (flash ? '#ff5050' : seqDone ? '#9be564' : SEQ_COLORS[seqShape % 5]) : GROUP_COLORS[c.group];
   glowAt(cx, cy, active ? 40 + Math.sin(frame * 0.2) * 3 : 24, color, active ? 0.75 : 0.35);
   const P = [[0, -14], [10.5, -6.5], [10.5, 7], [0, 14.5], [-10.5, 7], [-10.5, -6.5]];
   ctx.beginPath();
@@ -2628,7 +2644,7 @@ function drawCrystal(c, T, active, seqShape, seqDone, flash, frame) {
       sparkle4(cx + Math.cos(a) * 18, cy + Math.sin(a) * 14, 2.6 + Math.sin(frame * 0.2 + i) * 1.2, '#ffffff');
     }
   }
-  if (seqShape >= 0) drawShape(seqShape, cx, cy + 1, 4.6, OUTLINE);
+  if (seqShape >= 0) { drawShape(seqShape, cx, cy + 1, 6.4, 'rgba(255,255,255,.9)'); drawShape(seqShape, cx, cy + 1, 4.8, OUTLINE); }
 }
 
 function drawTarget(t, T, active) {
@@ -3248,23 +3264,102 @@ function drawHidden(x, y, T, a) {
 }
 
 // Indice peint dans le décor : visible seulement pour le bon rôle, et seulement de près
+// Indice de séquence : une tablette que seul l'Archer peut lire, et seulement de près (dans le noir : à portée d'une lumière).
+// Une balise pulsante la signale en permanence à l'Archer (même dans le noir), et le code lu reste affiché en haut de l'écran.
+function labelNear(lb, T, lightSources) {
+  const cx = lb.tx * T + T / 2;
+  const cy = lb.ty * T + T / 2;
+  let near = Infinity;
+  for (const s of lightSources) near = Math.min(near, Math.hypot(s.x - cx, s.y - cy));
+  return near;
+}
+function drawSymbolRow(shapes, cx, cy, step, size, done) {
+  const x0 = cx - ((shapes.length - 1) * step) / 2;
+  shapes.forEach((k, i) => {
+    const x = x0 + i * step;
+    const ok = done !== undefined && i < done;
+    ctx.globalAlpha = ok ? 0.35 : 1;
+    drawShape(k, x, cy, size + 2, 'rgba(10,8,30,.95)');
+    drawShape(k, x, cy, size, SEQ_COLORS[k % 5]);
+    ctx.globalAlpha = 1;
+  });
+}
 function drawLabel(lb, T, lightSources) {
   const kit = myKit();
   if (lb.role && lb.role !== kit) return;
   const cx = lb.tx * T + T / 2;
   const cy = lb.ty * T + T / 2;
-  let near = Infinity;
-  for (const s of lightSources) near = Math.min(near, Math.hypot(s.x - cx, s.y - cy));
+  const near = labelNear(lb, T, lightSources);
   if (near > lb.radius) return;
+  if (level.labelSeen) level.labelSeen.add(lb);
   ctx.save();
   ctx.globalAlpha = Math.min(1, (lb.radius - near) / 40);
-  const w = 24 + lb.shapes.length * 28;
-  ctx.fillStyle = 'rgba(30, 30, 80, .92)';
-  ctx.fillRect(cx - w / 2, cy - 22, w, 44);
-  ctx.strokeStyle = '#b79cff';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(cx - w / 2, cy - 22, w, 44);
-  lb.shapes.forEach((k, i) => drawShape(k, cx - ((lb.shapes.length - 1) * 28) / 2 + i * 28, cy, 8, '#f3efe4'));
+  const step = 32;
+  const w = 36 + lb.shapes.length * step;
+  const h = 64;
+  const top = Math.max(40, cy - h - 10); // au-dessus de l'endroit où se tient l'Archer, sans sortir de l'écran
+  const bx = Math.min(Math.max(cx, w / 2 + 8), LW - w / 2 - 8);
+  ctx.fillStyle = 'rgba(24, 20, 70, .95)';
+  rrPath(bx - w / 2, top, w, h, 8); ctx.fill();
+  ctx.strokeStyle = '#ffe27a';
+  ctx.lineWidth = 2.5;
+  rrPath(bx - w / 2, top, w, h, 8); ctx.stroke();
+  ctx.fillStyle = '#ffe27a';
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('CODE À DICTER AU MAGE', bx, top + 14);
+  drawSymbolRow(lb.shapes, bx, top + 34, step, 9);
+  ctx.fillStyle = 'rgba(255,255,255,.75)';
+  ctx.font = 'bold 10px system-ui, sans-serif';
+  lb.shapes.forEach((k, i) => ctx.fillText(String(i + 1), bx - ((lb.shapes.length - 1) * step) / 2 + i * step, top + 56));
+  if (Math.abs(bx - cx) > 4 || top < cy - h) { // petit trait vers l'emplacement réel de l'indice
+    ctx.strokeStyle = 'rgba(255,226,122,.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(bx, top + h); ctx.lineTo(cx, cy); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+// Balise : repère pulsant à l'emplacement de l'indice, visible de partout par l'Archer (dessinée par-dessus l'obscurité)
+function drawLabelBeacon(lb, T, lightSources) {
+  if (lb.role && lb.role !== myKit()) return;
+  const cx = lb.tx * T + T / 2;
+  const cy = lb.ty * T + T / 2;
+  if (labelNear(lb, T, lightSources) <= lb.radius * 0.8) return;
+  const pulse = 0.5 + 0.5 * Math.sin(frame * 0.08);
+  ctx.save();
+  glowAt(cx, cy, 34 + pulse * 10, '#ffe27a', 0.35 + pulse * 0.2);
+  ctx.fillStyle = 'rgba(24, 20, 70, .92)';
+  rrPath(cx - 15, cy - 17, 30, 34, 5); ctx.fill();
+  ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = 2;
+  rrPath(cx - 15, cy - 17, 30, 34, 5); ctx.stroke();
+  ctx.fillStyle = '#ffe27a';
+  ctx.font = 'bold 22px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('?', cx, cy + 8);
+  ctx.font = 'bold 10px system-ui, sans-serif';
+  ctx.fillText('INDICE', cx, cy - 24 - pulse * 2);
+  ctx.beginPath(); // petite flèche vers la tablette
+  ctx.moveTo(cx - 6, cy - 21 - pulse * 2 + 14); ctx.lineTo(cx + 6, cy - 21 - pulse * 2 + 14); ctx.lineTo(cx, cy - 17);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+// Carnet de l'Archer : le code déjà lu reste affiché en haut de l'écran, avec l'avancement du Mage
+function drawLabelNotebook(world) {
+  if (!level.labelSeen || !level.labelSeen.size) return;
+  const lb = [...level.labelSeen][0];
+  if (lb.role && lb.role !== myKit()) return;
+  const step = 30;
+  const w = 28 + lb.shapes.length * step;
+  const cx = LW / 2;
+  ctx.save();
+  ctx.fillStyle = 'rgba(14, 10, 40, .78)';
+  rrPath(cx - w / 2, 34, w, 40, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,226,122,.7)'; ctx.lineWidth = 1.5;
+  rrPath(cx - w / 2, 34, w, 40, 8); ctx.stroke();
+  ctx.fillStyle = '#ffe27a';
+  ctx.font = 'bold 9px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('CODE (à dicter)', cx, 45);
+  drawSymbolRow(lb.shapes, cx, 60, step, 7, world.seq.done ? lb.shapes.length : world.seq.p);
   ctx.restore();
 }
 
@@ -3818,7 +3913,7 @@ function draw() {
   L.checkpoints.forEach((c, i) => drawCheckpoint(c, T, world.cps.includes(i), frame, (world.cph || []).includes(i)));
   L.torches.forEach((t, i) => drawTorch(t, T, !!world.tc[i], frame));
   L.crystals.forEach((c, i) => {
-    const seqShape = c.seqIndex >= 0 ? c.seqIndex % 3 : -1;
+    const seqShape = c.seqIndex >= 0 ? c.seqIndex : -1;
     drawCrystal(c, T, !!world.cr[i], seqShape, world.seq.done, world.seq.flash, frame);
   });
   L.targets.forEach((t, i) => drawTarget(t, T, !!world.tg[i]));
@@ -3856,8 +3951,6 @@ function draw() {
   const ahead = Math.min((performance.now() - world.recvAt) / 16.7, 2);
   world.proj.forEach((pr) => drawProjectile(pr, ahead, frame));
 
-  level.cfg.labels.forEach((lb) => drawLabel(lb, T, lights));
-
   window.Themes.drawFront(ctx, theme, level.decor, frame, W, H);
 
   // Obscurité : un voile noir percé par la lumière du Mage, la lueur de chaque joueur et les torches
@@ -3893,6 +3986,9 @@ function draw() {
     ctx.restore();
   }
 
+  level.cfg.labels.forEach((lb) => drawLabel(lb, T, lights)); // par-dessus l'obscurité : l'indice reste lisible dès qu'on est à portée
+  level.cfg.labels.forEach((lb) => drawLabelBeacon(lb, T, lights));
+  drawLabelNotebook(world);
   if (level.cfg.link) drawTether();
 
   if (tutOn()) drawTutMarker(frame);
