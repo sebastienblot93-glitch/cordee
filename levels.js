@@ -223,7 +223,7 @@ const LEVELS = [
   }, { abilities: true, dark: true, heavy: [1], latch: { 1: 240 } }),
 
   /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
-  make('Les symboles', 'Six symboles s’affichent uniquement pour l’Archer, sur sa corniche. Il les dicte au Mage, qui touche les trois cristaux dans cet ordre (moins de 7 secondes entre deux tirs, une erreur remet tout à zéro). Au-delà : une plaque, une clé en hauteur, et une grille qui se referme vite.', ({ rect, put }) => {
+  make('Les symboles', 'Six symboles s’affichent uniquement pour l’Archer, sur sa corniche (repère « INDICE » ; le code lu reste noté en haut de l’écran). Il les dicte au Mage (rond, triangle, carré), qui touche les trois cristaux dans cet ordre (moins de 7 secondes entre deux tirs, une erreur remet tout à zéro). Au-delà : une plaque, une clé en hauteur, et une grille qui se referme vite.', ({ rect, put }) => {
     rect(15, 10, 3, 1, '#'); put(16, 9, '*'); // étoile cachée
     rect(2, 9, 4, 1); // corniche de l’indice : l’Archer seul y monte
     put(17, 3, 'z'); // cristal n°0
@@ -239,7 +239,7 @@ const LEVELS = [
   }, {
     abilities: true,
     sequence: { group: 3, order: [1, 2, 0, 2, 1, 0], timeout: 420 },
-    labels: [{ tx: 3, ty: 7, shapes: [1, 2, 0, 2, 1, 0], role: 'archer', radius: 130 }],
+    labels: [{ tx: 3, ty: 7, shapes: [1, 2, 0, 2, 1, 0], role: 'archer', radius: 170 }],
     latch: { 2: 100 },
   }),
 
@@ -559,7 +559,7 @@ const LEVELS = [
     put(27, 5, 'D');
   }, { abilities: true, fire: true, dark: true, link: true, heavy: [1], latch: { 1: 80, 2: 150, 3: 130 } }),
 
-  make('Le code', 'Huit symboles ne s’affichent que pour l’Archer, sur sa corniche. Il les dicte ; le Mage doit toucher les quatre cristaux dans cet ordre (moins de 5 s entre deux tirs, une erreur remet tout à zéro). Les piliers cachent les cristaux : il faut courir d’une salle à l’autre par les tunnels. Alors seulement la dernière grille s’ouvre.', ({ rect, put }) => {
+  make('Le code', 'Huit symboles ne s’affichent que pour l’Archer, sur sa corniche (repère « INDICE », le code reste noté en haut de l’écran). Il les dicte (rond, triangle, carré, losange) ; le Mage doit toucher les quatre cristaux dans cet ordre (moins de 5 s entre deux tirs, une erreur remet tout à zéro). Les piliers cachent les cristaux : il faut courir d’une salle à l’autre par les tunnels. Alors seulement la dernière grille s’ouvre.', ({ rect, put }) => {
     put(20, 10, '*'); // étoile cachée : salle 3
     rect(9, 5, 2, 7); // pilier 1 (tunnel en bas)
     rect(17, 5, 2, 7); // pilier 2
@@ -577,7 +577,7 @@ const LEVELS = [
   }, {
     abilities: true,
     sequence: { group: 3, order: [2, 1, 3, 0, 2, 0, 3, 1], timeout: 300 },
-    labels: [{ tx: 3, ty: 7, shapes: [2, 1, 3, 0, 2, 0, 3, 1], role: 'archer', radius: 150 }],
+    labels: [{ tx: 3, ty: 7, shapes: [2, 1, 3, 0, 2, 0, 3, 1], role: 'archer', radius: 170 }],
   }),
 
   make('La cadence', 'L’Archer prend la clé sur sa corniche, puis franchit le gouffre en dash. Le Mage le vise avec l’éclair d’échange (bouton Échange / touche E) pour prendre sa place de l’autre côté ; l’Archer refait ensuite le saut. Le mur a une fente qui s’ouvre en rythme : tirez sur la cible derrière, la porte basse s’ouvre. Enfin, à deux sur les plaques lourdes : la grille retombe vite, courez vers la porte !', ({ rect, put }) => {
@@ -656,7 +656,7 @@ const LEVELS = [
     put(27, 13, 'D');
   }, { abilities: true, fire: true, heavy: [1], and: [2], hold: { 2: 200 }, latch: { 1: 50, 2: 150 } }),
 
-  make('Le cachot', 'Dans le noir, cinq cristaux cachés derrière des piliers. L’Archer lit le code (il faut que le Mage l’éclaire) et le dicte ; le Mage touche les cristaux dans l’ordre : moins de 6 s entre deux tirs, une erreur remet tout à zéro. Les tunnels sont bas : courez de salle en salle. À la fin la dernière grille s’ouvre.', ({ rect, put }) => {
+  make('Le cachot', 'Dans le noir, cinq cristaux cachés derrière des piliers. L’Archer lit le code sur sa corniche (repère « INDICE », le code reste noté en haut de l’écran) et le dicte (rond, triangle, carré, losange, croix) ; le Mage touche les cristaux dans l’ordre : moins de 6 s entre deux tirs, une erreur remet tout à zéro. Les tunnels sont bas : courez de salle en salle. À la fin la dernière grille s’ouvre.', ({ rect, put }) => {
     put(19, 10, '*'); // étoile cachée
     rect(8, 4, 2, 8); // pilier 1 (tunnel en bas)
     rect(15, 2, 2, 10); // pilier 2
@@ -676,7 +676,7 @@ const LEVELS = [
     abilities: true,
     dark: true,
     sequence: { group: 3, order: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], timeout: 360 },
-    labels: [{ tx: 2, ty: 8, shapes: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], role: 'archer', radius: 190 }],
+    labels: [{ tx: 2, ty: 8, shapes: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], role: 'archer', radius: 130 }],
   }),
 
   make('La salle du trône', 'Dernière épreuve avant le Gardien. Étage du bas : plaques lourdes (la herse retombe vite), mur de 3 cases (l’Archer lance le Mage par-dessus, F pour porter et lancer), pics (blocs de glace du Mage), puis le ressort vers l’étage. En haut : l’Archer brûle le mur de bois, la clé, et enfin cristal, cible ET torche en même temps.', ({ rect, put }) => {
