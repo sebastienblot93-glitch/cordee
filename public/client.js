@@ -1439,7 +1439,7 @@ function startLevel(msg) {
     theme: chapter.theme,
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
-      seqGroup: cfg.seqGroup || 0, labels: cfg.labels || [],
+      seqGroup: cfg.seqGroup || 0, seqLen: cfg.seqLen || 0, labels: cfg.labels || [],
       link: !!cfg.link, sync: !!cfg.sync, carry: !!cfg.carry, heavy: cfg.heavy || [], boss: cfg.boss || null,
       tutorial: cfg.tutorial || null,
     },
@@ -3339,38 +3339,12 @@ function drawSymbolRow(shapes, cx, cy, step, size, done) {
   });
 }
 function drawLabel(lb, T, lightSources) {
+  // Lire l'indice = s'en approcher : le code s'inscrit alors dans le carnet, en haut de l'écran (une seule fois, pas de doublon)
   const kit = myKit();
   if (lb.role && lb.role !== kit) return;
-  const cx = lb.tx * T + T / 2;
-  const cy = lb.ty * T + T / 2;
-  const near = labelNear(lb, T, lightSources);
-  if (near > lb.radius) return;
+  if (labelNear(lb, T, lightSources) > lb.radius) return;
   if (level.labelSeen) level.labelSeen.add(lb);
-  ctx.save();
-  ctx.globalAlpha = Math.min(1, (lb.radius - near) / 40);
-  const step = 32;
-  const w = 36 + lb.shapes.length * step;
-  const h = 64;
-  const top = Math.max(40, cy - h - 10); // au-dessus de l'endroit où se tient l'Archer, sans sortir de l'écran
-  const bx = Math.min(Math.max(cx, w / 2 + 8), LW - w / 2 - 8);
-  ctx.fillStyle = 'rgba(24, 20, 70, .95)';
-  rrPath(bx - w / 2, top, w, h, 8); ctx.fill();
-  ctx.strokeStyle = '#ffe27a';
-  ctx.lineWidth = 2.5;
-  rrPath(bx - w / 2, top, w, h, 8); ctx.stroke();
-  ctx.fillStyle = '#ffe27a';
-  ctx.font = 'bold 11px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('CODE À DICTER AU MAGE', bx, top + 14);
-  drawSymbolRow(lb.shapes, bx, top + 34, step, 9);
-  ctx.fillStyle = 'rgba(255,255,255,.75)';
-  ctx.font = 'bold 10px system-ui, sans-serif';
-  lb.shapes.forEach((k, i) => ctx.fillText(String(i + 1), bx - ((lb.shapes.length - 1) * step) / 2 + i * step, top + 56));
-  if (Math.abs(bx - cx) > 4 || top < cy - h) { // petit trait vers l'emplacement réel de l'indice
-    ctx.strokeStyle = 'rgba(255,226,122,.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
-    ctx.beginPath(); ctx.moveTo(bx, top + h); ctx.lineTo(cx, cy); ctx.stroke(); ctx.setLineDash([]);
-  }
-  ctx.restore();
+  level.labelNearAt = frame;
 }
 // Balise : repère pulsant à l'emplacement de l'indice, visible de partout par l'Archer (dessinée par-dessus l'obscurité)
 function drawLabelBeacon(lb, T, lightSources) {
@@ -3407,7 +3381,8 @@ function drawLabelNotebook(world) {
   ctx.save();
   ctx.fillStyle = 'rgba(14, 10, 40, .78)';
   rrPath(cx - w / 2, 34, w, 40, 8); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,226,122,.7)'; ctx.lineWidth = 1.5;
+  const reading = level.labelNearAt === frame; // l'Archer est à portée de l'indice : le carnet brille
+  ctx.strokeStyle = reading ? '#ffe27a' : 'rgba(255,226,122,.7)'; ctx.lineWidth = reading ? 2.5 : 1.5;
   rrPath(cx - w / 2, 34, w, 40, 8); ctx.stroke();
   ctx.fillStyle = '#ffe27a';
   ctx.font = 'bold 9px system-ui, sans-serif';
@@ -3978,7 +3953,7 @@ function draw() {
 
   // Progression d'une séquence de cristaux
   if (level.cfg.seqGroup) {
-    const cnt = L.crystals.filter((c) => c.seqIndex >= 0).length;
+    const cnt = level.cfg.seqLen || L.crystals.filter((c) => c.seqIndex >= 0).length; // un rond par étape du code (pas par cristal)
     for (let i = 0; i < cnt; i++) {
       const on = world.seq.done || i < world.seq.p;
       ctx.beginPath();
