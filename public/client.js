@@ -1231,6 +1231,7 @@ const Ghost = {
     const w = np * 2 + 1;
     const n = Math.floor(g.d.length / w);
     if (n < 2) return null;
+    if (Math.abs(n * (Ghost.SAMPLE_MS / 1000) - g.t) > Math.max(0.8, g.t * 0.06)) return null; // enregistré sur une machine qui a « sauté » des échantillons : le fantôme irait trop vite, on l'écarte
     const pos = new Float32Array(n * np * 2);
     const face = new Int8Array(n * np);
     let cur = new Array(np * 2).fill(0);
@@ -1251,7 +1252,7 @@ const Ghost = {
   start(lv) {
     this.startAt = performance.now();
     if (!this.on || (lv.chapter && lv.chapter.tutorial)) { this.rec = null; this.best = null; return; }
-    this.rec = { t0: this.startAt, next: 0, d: [], ids: null, prev: null };
+    this.rec = { t0: this.startAt, n: 0, lastIdx: -1, d: [], ids: null, prev: null };
     this.best = this.load(lv.name);
     this.fetched = null;
     const team = window.Progress ? window.Progress.team() : '';
@@ -1273,9 +1274,10 @@ const Ghost = {
   sample() {
     const r = this.rec;
     if (!r || !level || !world || world.status !== 'playing' || document.hidden) return;
-    const now = performance.now();
-    if (now < r.next) return;
-    r.next = Math.max(r.next + this.SAMPLE_MS, now - this.SAMPLE_MS);
+    // Un échantillon par tranche de 100 ms depuis le début du niveau : si la machine a eu un à-coup, les échantillons manquants
+    // sont rattrapés par interpolation, pour que le fantôme reste exactement calé sur le temps réel.
+    const idx = Math.floor((performance.now() - this.startAt) / this.SAMPLE_MS);
+    if (idx <= r.lastIdx) return;
     if (!r.ids) {
       r.ids = players.map((p) => p.id).sort();
       r.look = r.ids.map((id) => { const p = players.find((q) => q.id === id) || {}; return { k: level.cfg.abilities ? p.role : 'plain', s: p.skin || 'tasse', c: p.color || '#ffffff' }; });
@@ -1288,9 +1290,18 @@ const Ghost = {
       cur.push(s ? Math.round(s.tx) : (r.prev ? r.prev[q * 2] : 0), s ? Math.round(s.ty) : (r.prev ? r.prev[q * 2 + 1] : 0));
       if (s && s.face < 0) mask |= 1 << q;
     });
-    cur.forEach((v, j) => r.d.push(r.prev ? v - r.prev[j] : v));
-    r.d.push(mask);
+    const from = r.prev; // position au dernier échantillon enregistré
+    const first = r.lastIdx;
+    for (let i = r.lastIdx + 1; i <= idx; i++) {
+      const k = from && idx > first ? (i - first) / (idx - first) : 1;
+      const pt = cur.map((v, j) => (from ? Math.round(from[j] + (v - from[j]) * k) : v));
+      const prevPt = r.last || null;
+      pt.forEach((v, j) => r.d.push(prevPt ? v - prevPt[j] : v));
+      r.d.push(mask);
+      r.last = pt;
+    }
     r.prev = cur;
+    r.lastIdx = idx;
   },
   // Fin de niveau gagné : on garde cette partie si elle bat le fantôme actuel
   finish(res, lv) {
