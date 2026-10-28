@@ -529,6 +529,34 @@ const LEVELS = [
     put(2, 6, 'D');
   }, { abilities: true, fire: true, and: [1, 2], hold: { 1: 170, 2: 200 }, latch: { 1: 150, 2: 150 } }),
 
+  make('Le boyau', 'Dans le noir, trois couloirs superposés. 1) Plaques lourdes à deux, puis un pont lié au-dessus des pics : ne vous éloignez pas à plus de 7 cases l’un de l’autre. 2) Le ressort vous envoie à l’étage ; l’Archer brûle le mur de bois, le Mage touche le cristal puis courez avant que la grille ne retombe. 3) Un dernier ressort ; la plaque ouvre une grille lointaine.', ({ rect, put }) => {
+    put(26, 3, '*'); // étoile cachée
+    rect(1, 10, 25, 1); // dalle 1 (trou à x=26..27)
+    put(28, 10, '#');
+    rect(4, 6, 25, 1); // dalle 2 (trou à x=1..3)
+    rect(1, 2, 28, 1); // plafond
+    put(2, 13, 'S');
+    put(4, 13, '1');
+    put(5, 13, '1');
+    rect(9, 11, 1, 3, 'a');
+    put(10, 13, 'C');
+    rect(12, 14, 11, 1, '^'); // pics x=12..22
+    rect(12, 13, 3, 1, 'l');
+    rect(16, 13, 3, 1, 'l');
+    rect(20, 13, 3, 1, 'l');
+    put(24, 13, 'C');
+    put(26, 13, 'j'); // ressort vers l’étage
+    rect(19, 7, 2, 3, 't'); // mur de bois
+    rect(12, 10, 3, 1, '^'); // trou à pics dans la dalle
+    put(15, 7, 'y'); // cristal du groupe 2
+    rect(5, 7, 1, 3, 'b'); // grille b
+    put(2, 9, 'j'); // ressort vers le dernier étage
+    put(6, 5, '3'); // plaque
+    rect(20, 3, 1, 3, 'c'); // grille lointaine
+    put(24, 5, 'K');
+    put(27, 5, 'D');
+  }, { abilities: true, fire: true, dark: true, link: true, heavy: [1], latch: { 1: 80, 2: 150, 3: 130 } }),
+
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
     put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
