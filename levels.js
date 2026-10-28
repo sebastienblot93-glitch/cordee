@@ -49,119 +49,176 @@ function make(name, hint, draw, opts = {}) {
 
 const LEVELS = [
   /* ===== Chapitre 1 : en équipe, sans pouvoirs (porter, lancer, rester liés) ===== */
-  make('Échauffement', 'Ramassez la clé tout en haut, puis rejoignez tous la porte.', ({ rect, put }) => {
-    put(12, 4, '*'); // étoile cachée
-    [[5, 12], [11, 10], [17, 8], [23, 6]].forEach(([x, y]) => rect(x, y, 4, 1));
-    put(24, 5, 'K');
+  make('Le sas', 'Trois salles, deux grilles. Une grille ne reste ouverte que si quelqu’un tient une plaque : à qui de rester en arrière ? La clé est sur une corniche trop haute pour sauter seul.', ({ rect, put }) => {
+    put(8, 10, '*'); // étoile cachée : sur une marche haute de la salle de départ
+    rect(8, 11, 2, 1); // marche (3 cases : il faut faire la courte-échelle)
+    put(3, 13, '2'); // plaque P2 (ouvre la grille B)
+    put(6, 13, '1'); // plaque P1 (ouvre la grille A)
+    rect(10, 1, 1, 13, 'a'); // grille A
+    put(12, 13, '1'); // plaque P1' (salle 2)
+    rect(13, 14, 3, 1, '^'); // fosse à pointes
+    rect(17, 11, 3, 1); // corniche de la clé : trop haute pour un seul saut
+    put(18, 10, 'K');
+    rect(20, 1, 1, 13, 'b'); // grille B
+    put(22, 13, '2'); // plaque P2' (salle 3)
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }),
+  }, { latch: { 1: 240, 2: 240 } }),
 
-  make('Le mur', 'Montez-vous sur la tête pour passer le mur, puis tenez la plaque pour ouvrir.', ({ rect, put }) => {
-    put(26, 8, '*'); // étoile cachée
-    rect(14, 11, 1, 3, 'a'); // mur de 3 cases : trop haut pour sauter seul
-    put(18, 13, '1'); // plaque de l'autre côté du mur
-    rect(21, 12, 5, 1); // plafond d'un tunnel bas
-    put(23, 13, 'K'); // clé au fond du tunnel
-    put(28, 13, 'D');
+  make('Funambules', 'Un fil magique vous relie : les blocs verts n’existent que si vous restez à moins de 7 cases l’un de l’autre. À chaque palier, l’un tient la plaque pour la grille pendant que l’autre grimpe. Qui passe en premier ?', ({ rect, put }) => {
+    put(26, 1, '*'); // étoile cachée : sous le plafond du dernier palier
+    // palier A (le sol)
+    put(5, 13, '1');
+    rect(7, 1, 1, 13, 'a');
+    put(9, 14, '^');
+    put(9, 12, 'l');
+    put(14, 14, '^');
+    put(19, 14, '^');
+    // palier B
+    rect(10, 11, 4, 3);
+    put(10, 10, '2');
+    put(11, 10, '2');
+    rect(12, 1, 1, 10, 'b');
+    put(14, 9, 'l');
+    // palier C
+    rect(15, 8, 4, 6);
+    put(15, 7, '3');
+    put(16, 7, '3');
+    rect(17, 1, 1, 7, 'c');
+    put(19, 6, 'l');
+    // palier D (arrivée)
+    rect(20, 5, 9, 9);
+    put(21, 4, '3');
+    put(22, 4, '3');
+    put(24, 4, 'K');
+    put(27, 4, 'D');
     put(2, 13, 'S');
-  }),
+  }, { link: true, latch: { 1: 100, 2: 100, 3: 100 } }),
 
-  make('Courte-échelle', 'Une corniche trop haute, même sur la tête de l’autre ! Placez-vous contre votre coéquipier, appuyez sur F pour le porter, puis F encore pour le lancer sur la corniche. Là-haut, il pèse sur la plaque pour ouvrir la grande porte. Deuxième lancer pour la clé !', ({ rect, put }) => {
-    put(26, 6, '*'); // étoile cachée
-    rect(6, 10, 5, 1); // corniche à 4 cases : la tête de l'autre ne suffit pas
-    put(9, 9, '1'); // plaque sur la corniche
-    rect(14, 1, 1, 13, 'a'); // grande porte
-    rect(20, 10, 7, 1); // 2e corniche (large : le lancer porte loin)
-    put(23, 9, 'K');
+
+  make('La tour', 'Deux tours, deux lancers. Placez-vous contre votre coéquipier, F pour le porter, F encore pour le lancer sur la corniche (garde → ou ← enfoncée pendant le vol). Là-haut, il tient la plaque pendant que l’autre passe.', ({ rect, put }) => {
+    put(3, 5, '*'); // étoile cachée : haut de la première salle
+    // première tour : corniche haute (4 cases), plaque P1 qui ouvre la grille A
+    rect(6, 10, 5, 1);
+    put(7, 9, '1');
+    put(8, 9, '1');
+    rect(12, 1, 1, 13, 'a');
+    // deuxième salle : escalier libre jusqu'à la marche 3
+    rect(13, 12, 2, 1);
+    rect(15, 10, 2, 1);
+    rect(17, 8, 2, 1);
+    // la grande plate-forme (arrivée) : inaccessible sans lancer ou sans l'escalier de droite
+    rect(26, 4, 3, 1);
+    put(26, 3, '2');
+    put(28, 3, 'K');
+    put(27, 3, 'D');
+    rect(23, 4, 1, 10, 'b'); // grille B au pied de l'escalier de droite
+    rect(26, 12, 2, 1);
+    rect(24, 10, 2, 1);
+    rect(26, 8, 2, 1);
+    rect(24, 6, 2, 1);
+    put(2, 13, 'S');
+  }, { carry: true, latch: { 1: 180, 2: 120 } }),
+
+
+  make('Les remparts', 'Le rempart est trop haut : lancez-en un par-dessus (F pour porter, F pour lancer). De l’autre côté, sa plaque ouvre la poterne. Puis la courte-échelle jusqu’à la corniche (plaque et clé), et enfin le gouffre : le fil vous lie, passez ensemble !', ({ rect, put }) => {
+    put(28, 3, '*'); // étoile cachée : coin haut droit
+    // le rempart : 2 cases d'épaisseur, 4 de haut, une poterne (grille A) en bas
+    rect(9, 10, 2, 2);
+    rect(9, 12, 2, 2, 'a');
+    put(11, 13, '1');
+    put(12, 13, '1');
+    // la corniche de la plaque B et de la clé (3 cases : courte-échelle)
+    rect(13, 11, 3, 1);
+    put(13, 10, 'K');
+    put(14, 10, '2');
+    put(15, 10, '2');
+    rect(19, 1, 1, 13, 'b');
+    // le gouffre
+    rect(20, 14, 7, 1, '^');
+    rect(21, 12, 2, 1, 'l');
+    rect(24, 12, 2, 1, 'l');
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { carry: true, latch: { 1: 600 } }),
-
-  make('La corde', 'Un fil magique vous relie : les blocs verts disparaissent si vous vous éloignez de plus de 7 cases (le fil vire au rouge avant la rupture). Avancez ensemble. Un joueur tient la plaque pour ouvrir la porte, l’autre passe : attendez-vous, puis rattrapez-vous vite !', ({ rect, put }) => {
-    put(27, 7, '*'); // étoile cachée
-    rect(3, 14, 24, 1, '^'); // fosse de pics
-    rect(4, 12, 3, 1, 'l');
-    rect(9, 11, 3, 1, 'l');
-    rect(14, 10, 3, 1, 'l');
-    put(14, 9, 'C');
-    put(15, 9, '1'); // plaque : ouvre la porte
-    rect(18, 1, 1, 13, 'a');
-    rect(20, 11, 3, 1, 'l');
-    rect(24, 12, 3, 1, 'l');
-    put(28, 13, 'D');
-    put(2, 13, 'S');
-  }, { link: true, latch: { 1: 300 } }),
+  }, { carry: true, link: true, latch: { 1: 180, 2: 120 } }),
 
   /* ===== Chapitre 2 : Arcanes, un Mage et un Archer ===== */
-  make('L’étincelle', 'Le Mage choisit l’Orbe (bouton sous le jeu), puis clique sur le cristal pour le toucher. L’Archer, lui, saute deux fois pour atteindre la clé.', ({ rect, put }) => {
-    put(19, 3, '*'); // étoile cachée
-    rect(11, 5, 1, 9, 'a'); // grande porte, ouverte quelques secondes par le cristal
-    put(8, 9, 'x');
-    rect(15, 10, 3, 1); // corniche à 4 cases : seul l'Archer l'atteint
-    put(16, 9, 'K');
-    put(27, 13, 'D');
+  make('Verrou', 'La grille exige TROIS choses en même temps : le Mage sur sa plaque, son orbe sur le cristal ET la flèche de l’Archer sur la cible. L’Archer monte sur la corniche d’un double saut. Allez vite : les flammes s’éteignent !', ({ rect, put }) => {
+    put(13, 2, '*'); // étoile cachée : haut de la première salle
+    put(3, 13, '1'); // plaque du Mage
+    put(7, 6, 'x'); // cristal visible depuis la plaque
+    rect(9, 10, 3, 1); // corniche de l'Archer (4 cases : double saut)
+    put(13, 4, 'o'); // cible visible depuis la corniche
+    rect(15, 1, 1, 13, 'a'); // la grille
+    rect(21, 9, 3, 1); // corniche de la clé (5 cases : double saut)
+    put(22, 8, 'K');
+    put(26, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 300 } }),
+  }, { abilities: true, and: [1], hold: { 1: 150 }, latch: { 1: 150 } }),
 
-  make('Le tireur', 'Le Mage ouvre la première porte (orbe sur le cristal). L’Archer tire par le hublot du mur sur la cible : la flèche retombe, visez un peu plus haut.', ({ rect, put }) => {
-    put(27, 7, '*'); // étoile cachée
-    put(4, 8, 'y'); // cristal du Mage
-    rect(8, 1, 1, 13, 'b'); // première porte
-    rect(15, 1, 2, 13); // mur
-    rect(15, 8, 2, 3, '.'); // hublot de 3 cases
-    rect(15, 11, 2, 3, 'a'); // porte au pied du mur
-    put(22, 8, 'o'); // cible derrière le mur
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 0, 2: 0 } }),
-
-  make('Le gouffre', 'Un gouffre trop large pour sauter. Le Mage choisit la Glace (bouton sous le jeu) et clique sur les runes ; seul l’Archer atteint la clé.', ({ rect, put }) => {
-    put(22, 3, '*'); // étoile cachée
-    rect(6, 14, 18, 1, '^'); // fond du gouffre : pics (18 cases, même l'Archer ne passe pas seul)
-    put(10, 13, 'r');
+  make('Pont de glace', 'Un gouffre immense. Le Mage fait naître des blocs de glace sur les runes (clic droit, 3 blocs au plus, ils fondent en 10 s). L’Archer, lui, le franchit d’un double saut et d’un dash. Un cristal derrière le gouffre ouvre la grille.', ({ rect, put }) => {
+    put(27, 1, '*'); // étoile cachée
+    rect(7, 14, 10, 1, '^'); // gouffre de 10 cases
+    put(9, 13, 'r');
+    put(12, 13, 'r');
     put(15, 13, 'r');
-    put(20, 13, 'r');
-    rect(24, 10, 3, 1); // corniche à 4 cases : double saut obligatoire
-    put(25, 9, 'K');
+    put(19, 9, 'x'); // cristal derrière le gouffre
+    rect(22, 1, 1, 13, 'a');
+    put(24, 13, 'K');
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true }),
+  }, { abilities: true, hold: { 1: 0 } }),
+
+  make('Meurtrière', 'Le mur ne s’ouvre que par la meurtrière, et elle ne s’ouvre que par moments. L’Archer tire sur la cible au bon moment ; le Mage touche le cristal pendant que la cible est active. Puis passez la grille ensemble.', ({ rect, put }) => {
+    put(27, 2, '*'); // étoile cachée
+    put(4, 8, 'x'); // cristal du Mage
+    rect(12, 1, 2, 13);
+    rect(12, 8, 2, 1, 'w'); // meurtrière à volet
+    rect(12, 9, 2, 5, 'a'); // porte au pied du mur
+    put(19, 11, 'o'); // cible derrière le mur, plus bas que la meurtrière
+    put(26, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, and: [1], hold: { 1: 240 }, latch: { 1: 150 }, shutters: { 1: { period: 150, open: 70, phase: 0 } } }),
 
   /* ===== Chapitre 3 : Ténèbres ===== */
-  make('Dans le noir', 'Seul le Mage éclaire. Le Mage ouvre la porte de départ, puis des plateformes invisibles traversent les pics : l’Archer saute deux fois pour prendre la clé tout en haut.', ({ rect, put }) => {
-    put(21, 1, '*'); // étoile cachée
-    rect(5, 14, 20, 1, '^');
-    rect(4, 1, 1, 13, 'a'); // porte de départ
-    put(2, 6, 'x'); // cristal du Mage
-    rect(7, 12, 2, 1, 'h');
-    rect(11, 10, 2, 1, 'h');
-    rect(15, 11, 2, 1, 'h');
-    rect(19, 9, 2, 1, 'h');
-    rect(23, 11, 2, 1, 'h');
-    put(11, 9, 'C');
-    put(23, 10, 'C');
-    rect(26, 6, 3, 1); // corniche très haute : double saut de l'Archer
-    put(27, 5, 'K');
-    put(3, 13, 'D');
+  make('Lueur', 'Seul le Mage éclaire. Des dalles invisibles traversent les pics : suivez la lumière ! Depuis la dernière dalle, l’orbe du Mage touche le cristal et ouvre la grille. Plus loin, l’escalier de blocs liés ne tient que si vous restez ensemble.', ({ rect, put }) => {
+    put(5, 3, '*'); // étoile cachée : haut de la salle de départ
+    rect(3, 14, 10, 1, '^'); // gouffre
+    rect(4, 12, 2, 1, 'h'); // dalles invisibles
+    rect(7, 11, 2, 1, 'h');
+    rect(10, 12, 2, 1, 'h');
+    put(13, 13, 'C');
+    put(11, 8, 'x'); // cristal au-dessus de la dernière dalle
+    rect(15, 1, 1, 13, 'a');
+    rect(17, 12, 2, 1, 'l'); // escalier lié
+    rect(19, 10, 2, 1, 'l');
+    rect(21, 8, 2, 1, 'l');
+    rect(23, 6, 2, 1, 'l');
+    rect(25, 5, 4, 1); // mezzanine
+    put(26, 4, 'K');
+    put(17, 13, 'C');
     put(2, 13, 'S');
-  }, { abilities: true, dark: true, hold: { 1: 0 } }),
-
-  make('Le fil d’Ariane', 'Dans le noir, des blocs liés forment le chemin : restez près de la lumière du Mage, ils disparaissent si vous vous éloignez. Le Mage touche le cristal pour ouvrir la porte. L’Archer saute deux fois pour prendre la clé tout là-haut.', ({ rect, put }) => {
-    put(19, 1, '*'); // étoile cachée
-    rect(3, 14, 24, 1, '^');
-    rect(4, 12, 3, 1, 'l');
-    rect(9, 11, 3, 1, 'l');
-    put(10, 8, 'x'); // cristal du Mage
-    rect(14, 1, 1, 13, 'a');
-    rect(16, 11, 3, 1, 'l');
-    put(17, 10, 'C');
-    rect(21, 10, 3, 1, 'l');
-    rect(24, 7, 3, 1, 'l'); // trop haut pour le Mage : double saut de l'Archer
-    put(25, 6, 'K');
-    put(28, 13, 'D');
-    put(2, 13, 'S');
+    put(27, 13, 'D');
   }, { abilities: true, dark: true, link: true, hold: { 1: 0 } }),
+
+  make('Le fil d’Ariane', 'Dans le noir, deux grands vides. Le Mage fait naître des blocs de glace sur les runes (clic droit) : trois à la fois, et ils fondent en 10 s ! Au bout, la plaque lourde exige DEUX poids. L’Archer ramasse la clé, cachée en hauteur.', ({ rect, put }) => {
+    put(14, 4, '*'); // étoile cachée
+    rect(5, 14, 8, 1, '^');
+    rect(13, 12, 3, 2); // plate-forme 2
+    rect(16, 14, 8, 1, '^');
+    put(7, 13, 'r');
+    put(10, 13, 'r');
+    put(18, 13, 'r');
+    put(21, 13, 'r');
+    rect(24, 12, 5, 2); // plate-forme 3
+    put(24, 11, '1');
+    put(25, 11, '1');
+    rect(26, 1, 1, 10, 'a');
+    put(2, 13, 'S');
+    rect(14, 9, 2, 1, 'h'); // pas invisibles vers la clé
+    put(15, 8, 'K');
+    put(27, 11, 'D');
+  }, { abilities: true, dark: true, heavy: [1], latch: { 1: 240 } }),
 
   /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
   make('Le sceau', 'Casse-tête : un indice n’apparaît que pour l’Archer (sur la corniche). Il le dicte au Mage, qui touche les trois cristaux dans le bon ordre.', ({ rect, put }) => {
@@ -615,7 +672,7 @@ const CHAPTERS = [
 
 let _c = 0;
 CHAPTERS.forEach((ch, i) => {
-  for (let k = 0; k < ch.count; k++) LEVELS[_c++].chapter = i;
+  for (let k = 0; k < ch.count && _c < LEVELS.length; k++) LEVELS[_c++].chapter = i;
 });
 
 // Minuteur (en secondes) : chaque niveau en a un. Si le temps est écoulé, le niveau redémarre.

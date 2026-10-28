@@ -25,7 +25,7 @@
   const COOP = {
     linkDist: 224, // blocs liés (l) : ils disparaissent si deux joueurs sont à plus de 7 cases l'un de l'autre
     linkBack: 192, // ... et reviennent quand ils se rapprochent à moins de 6 cases (évite le clignotement)
-    syncWindow: 20, // sauts synchronisés (s) : les deux joueurs doivent sauter à moins de 1/3 de seconde d'écart
+    syncWindow: 30, // sauts synchronisés (s) : les deux joueurs doivent sauter à moins d'une demi-seconde d'écart
     syncHold: 360, // ... les blocs apparaissent alors pendant 6 secondes
     grabReach: 56, // porter : distance maximale entre les deux joueurs
     throwVx: 6.5, throwVy: -11, // lancer
