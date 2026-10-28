@@ -411,63 +411,70 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, fire: true, heavy: [1], and: [1], hold: { 1: 240 }, latch: { 1: 150 } }),
 
-  /* ===== Chapitre 7 : Les Brumes (échange) ===== */
-  make('Échange', 'L’Archer franchit le gouffre en dash. Visez-le avec l’éclair d’échange (bouton Échange, puis clic sur l’Archer) : le Mage prend sa place de l’autre côté ! Puis le Mage touche le cristal.', ({ rect, put }) => {
-    put(19, 7, '*'); // étoile cachée
-    rect(6, 14, 12, 1, '^');
-    put(21, 10, 'x');
-    put(22, 13, 'K');
-    rect(24, 1, 1, 13, 'a');
+  /* ===== Chapitre 7 : Les Brumes (éclair d’échange) ===== */
+  make('Le passage', 'Le bois d’abord, puis cristal ET torche ensemble. Ensuite le gouffre est trop large pour le Mage : l’Archer le franchit au dash, puis le Mage vise l’Archer avec l’éclair d’échange (bouton Échange, puis clic sur lui) et prend sa place de l’autre côté — l’Archer se retrouve alors de l’autre côté, à vous de le faire revenir !', ({ rect, put }) => {
+    put(10, 2, '*'); // étoile cachée
+    rect(6, 1, 2, 13, 't'); // mur de bois
+    put(9, 13, 'C');
+    put(11, 5, 'f'); // torche
+    put(10, 9, 'x'); // cristal
+    rect(13, 1, 1, 13, 'a');
+    put(14, 13, 'C');
+    rect(15, 14, 9, 1, '^'); // gouffre de 9 cases
+    put(24, 13, 'C');
+    put(25, 13, 'K');
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, swap: true, hold: { 1: 900 } }),
+  }, { abilities: true, fire: true, swap: true, and: [1], hold: { 1: 420 }, latch: { 1: 200 } }),
 
-  make('Le pilier', 'Le cristal est posé sur un pilier inatteignable pour le Mage. Le Mage monte sur la corniche, l’Archer bondit sur le pilier : échangez vos places !', ({ rect, put }) => {
-    put(24, 7, '*'); // étoile cachée
-    put(3, 13, 'j');
-    rect(5, 8, 4, 1);
-    put(11, 13, 'j');
-    rect(14, 6, 3, 8);
-    put(16, 5, 'x');
-    rect(19, 1, 2, 13);
-    rect(19, 11, 2, 3, 'a');
-    put(24, 13, 'K');
-    put(28, 13, 'D');
+  make('Le pilier', 'Le cristal est derrière une fenêtre en haut du mur, hors de portée du Mage. L’Archer grimpe sur la corniche, puis le Mage échange sa place avec lui (éclair d’échange). À l’autre bout : une clé en hauteur et deux plaques lourdes.', ({ rect, put }) => {
+    put(24, 2, '*'); // étoile cachée
+    rect(1, 12, 3, 1); // marche basse (le Mage y monte)
+    rect(8, 8, 4, 1); // corniche d’où l’on vise la fenêtre : 4 cases au-dessus de la marche, Archer seul
+    rect(14, 1, 2, 4); // mur, fenêtre aux lignes 5 et 6
+    rect(14, 7, 2, 3);
+    rect(14, 10, 2, 4, 'a'); // porte au pied du mur
+    put(19, 5, 'x'); // cristal derrière la fenêtre
+    rect(22, 10, 3, 1); // corniche de la clé
+    put(23, 9, 'K');
+    put(17, 13, '2'); // plaques lourdes
+    put(18, 13, '2');
+    rect(26, 1, 1, 13, 'b');
+    put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, swap: true, hold: { 1: 900 } }),
+  }, { abilities: true, swap: true, heavy: [2], hold: { 1: 0 }, latch: { 2: 120 } }),
 
-  make('Brouillard', 'Dans le noir, l’Archer passe le gouffre, le Mage le rejoint par l’échange (bouton Échange), puis le bois brûle. Le Mage touche le cristal derrière le mur.', ({ rect, put }) => {
+  make('Brouillard', 'Dans le noir, l’Archer passe le gouffre, le Mage le rejoint par l’échange (bouton Échange), puis le bois brûle. Le Mage touche le cristal derrière le mur ; la clé est sur une corniche.', ({ rect, put }) => {
     put(19, 7, '*'); // étoile cachée
-    rect(6, 14, 12, 1, '^');
-    put(18, 13, 'C');
+    put(5, 13, 'C');
+    rect(6, 14, 10, 1, '^');
+    put(16, 13, 'C');
     rect(21, 1, 2, 13, 't');
     put(24, 5, 'x');
-    put(24, 13, 'K');
-    rect(25, 1, 1, 13, 'a');
-    put(28, 13, 'D');
+    rect(23, 10, 3, 1);
+    put(24, 9, 'K');
+    rect(26, 1, 1, 13, 'a');
+    put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, swap: true, fire: true, dark: true, hold: { 1: 900 } }),
+  }, { abilities: true, swap: true, fire: true, dark: true, hold: { 1: 0 } }),
 
-  make('Cordée', 'Dernière épreuve : le bois, la glace et l’échange. Chacun son tour, personne ne passe seul.', ({ rect, put }) => {
-    put(9, 6, '*'); // étoile cachée
-    rect(3, 1, 1, 13, 't');
-    put(5, 5, 'x');
-    rect(6, 1, 1, 13, 'a');
-    put(8, 13, 'C');
-    rect(9, 14, 6, 1, '^');
-    put(10, 13, 'r');
-    put(13, 13, 'r');
-    put(11, 5, 'g');
-    rect(16, 1, 1, 13, 'b');
-    put(17, 13, 'C');
-    rect(18, 14, 7, 1, '^');
-    put(21, 7, 'z');
-    put(25, 13, 'K');
-    put(26, 13, 'C');
-    rect(27, 1, 1, 13, 'c');
-    put(28, 13, 'D');
+  make('Cordée', 'Dernière épreuve du chapitre : le gouffre (dash et échange), le bois, cristal et torche ensemble, puis la montée sur des marches de glace que le Mage fait naître — trois blocs, dix secondes. Personne ne passe seul.', ({ rect, put }) => {
+    put(17, 1, '*'); // étoile cachée
+    put(3, 13, 'C');
+    rect(4, 14, 8, 1, '^'); // gouffre de 8 cases
+    put(12, 13, 'C');
+    rect(14, 1, 2, 13, 't'); // mur de bois
+    put(17, 4, 'x'); // cristal
+    put(18, 6, 'f'); // torche
+    rect(20, 1, 1, 13, 'a');
+    put(21, 12, 'r'); // marches de glace
+    put(22, 10, 'r');
+    put(23, 8, 'r');
+    rect(24, 6, 5, 8); // grand mur : la sortie est au sommet
+    put(25, 5, 'K');
+    put(27, 5, 'D');
     put(1, 13, 'S');
-  }, { abilities: true, swap: true, fire: true, hold: { 1: 600, 2: 0, 3: 0 } }),
+  }, { abilities: true, swap: true, fire: true, and: [1], hold: { 1: 400 }, latch: { 1: 200 } }),
 
   /* ===== Chapitre 8 : Le Sommet (très difficile) ===== */
   make('Camp de base', 'Trois épreuves d’affilée, sans pouvoirs. 1) Posez-vous À DEUX sur la plaque lourde et passez la porte avant qu’elle ne se referme. 2) Le fil : restez à moins de 7 cases pour que les blocs verts tiennent. 3) Sautez ENSEMBLE pour faire apparaître l’escalier doré : clé, puis porte !', ({ rect, put }) => {
