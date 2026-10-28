@@ -654,29 +654,27 @@ const LEVELS = [
     put(27, 13, 'D');
   }, { abilities: true, fire: true, heavy: [1], and: [2], hold: { 2: 200 }, latch: { 1: 50, 2: 150 } }),
 
-  make('Les Oubliettes', 'Deux épreuves. 1) L’Archer monte sur la corniche de gauche : lui seul voit la séquence de 5 symboles. Il la dicte, le Mage touche les trois cristaux dans cet ordre (moins de 5 secondes entre deux tirs, une erreur remet tout à zéro). 2) Au-delà de la grille, les pics : l’Archer saute sur la dalle, le Mage échange sa place avec lui (bouton Échange, puis clic sur l’Archer), et ainsi de suite jusqu’en haut. Attention : la dalle du milieu disparaît par moments !', ({ rect, put }) => {
-    put(24, 2, '*'); // étoile cachée, au-dessus de la dernière dalle
-    rect(2, 10, 3, 1); // corniche de l'indice (l'Archer seul)
-    put(7, 3, 'z'); // cristaux de la séquence (numérotés de haut en bas)
-    put(13, 6, 'z');
-    put(16, 10, 'z');
-    put(12, 13, 'C');
-    rect(18, 1, 1, 13, 'c'); // grille : s'ouvre quand la séquence est juste
-    put(17, 13, 'C');
-    rect(19, 14, 10, 1, '^'); // pics de x=19 à x=28
-    rect(19, 11, 2, 1); // dalle 1 : 3 cases au-dessus du sol (Archer seulement)
-    rect(22, 8, 2, 1, 'u'); // dalle 2 : elle disparaît par moments
-    rect(25, 5, 2, 1); // dalle 3
-    put(26, 4, 'K');
-    rect(27, 9, 3, 1); // terrasse de la porte
-    put(28, 8, 'D');
+  make('Le cachot', 'Dans le noir, cinq cristaux cachés derrière des piliers. L’Archer lit le code (il faut que le Mage l’éclaire) et le dicte ; le Mage touche les cristaux dans l’ordre : moins de 6 s entre deux tirs, une erreur remet tout à zéro. Les tunnels sont bas : courez de salle en salle. À la fin la dernière grille s’ouvre.', ({ rect, put }) => {
+    put(19, 10, '*'); // étoile cachée
+    rect(8, 4, 2, 8); // pilier 1 (tunnel en bas)
+    rect(15, 2, 2, 10); // pilier 2
+    rect(22, 4, 2, 8, '#'); // pilier 3
+    rect(22, 12, 1, 2, 'c'); // grille de sortie dans le tunnel 3
+    rect(1, 10, 3, 1); // corniche de lecture : l’Archer seul
+    put(4, 3, 'z');
+    put(13, 3, 'z');
+    put(19, 3, 'z');
+    put(5, 9, 'z');
+    put(12, 8, 'z');
+    rect(26, 10, 3, 1); // corniche de la clé
+    put(27, 9, 'K');
+    put(27, 13, 'D');
     put(2, 13, 'S');
   }, {
     abilities: true,
-    swap: true,
-    sequence: { group: 3, order: [2, 0, 1, 0, 2], timeout: 300 },
-    labels: [{ tx: 3, ty: 8, shapes: [2, 0, 1, 0, 2], role: 'archer', radius: 130 }],
-    shutters: { 3: { period: 360, open: 90, phase: 0 } },
+    dark: true,
+    sequence: { group: 3, order: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], timeout: 360 },
+    labels: [{ tx: 2, ty: 8, shapes: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], role: 'archer', radius: 190 }],
   }),
 
   make('Le Donjon', 'La dernière épreuve avant le Gardien, et la plus dure. 1) L’Archer embrase le mur de bois. 2) Posez-vous À DEUX sur la plaque lourde et passez la grille avant qu’elle ne retombe. 3) Salle des sceaux : le Mage touche le cristal pendant que l’Archer tire sur la cible ET allume la torche, le tout en moins de 2 secondes. 4) Les dalles montent en vague au-dessus des pics, d’une à l’autre sans vous arrêter. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
