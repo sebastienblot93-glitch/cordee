@@ -298,48 +298,61 @@ const LEVELS = [
   }, { abilities: true, heavy: [3], latch: { 3: 100 } }),
 
   /* ===== Chapitre 5 : Jardins suspendus (ressorts) ===== */
-  make('Tremplin', 'Le ressort propulse très haut : retombez dessus pour atteindre la clé. Le Mage ouvre la porte rose (orbe sur le cristal), l’Archer baisse la porte bleue (flèche sur la cible).', ({ rect, put }) => {
-    put(4, 1, '*'); // étoile cachée
-    put(5, 13, 'j');
-    rect(7, 8, 4, 1); // corniche à 6 cases : seul le ressort y mène
-    put(9, 7, 'K');
-    put(12, 4, 'x');
-    rect(14, 1, 1, 13, 'a');
-    put(17, 5, 'p');
-    rect(21, 1, 1, 13, 'b');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, hold: { 1: 600, 2: 0 } }),
-
-  make('Haute voltige', 'Deux plaques lourdes : il faut être DEUX dessus pour les enfoncer. Posez-vous ensemble sur la première, filez avant que la porte ne se referme, puis grimpez de ressort en ressort (restez appuyés vers la droite) jusqu’à la clé. En haut, la deuxième plaque ouvre la porte de sortie : redescendez vite !', ({ rect, put }) => {
+  make('Tremplin', 'Les ressorts propulsent à 6 cases. Une plaque ne reste enfoncée que si on est dessus : l’un monte sur la terrasse et tient la plaque, l’autre passe la grille, puis on inverse. Quand la plaque se relâche, vous n’avez que quelques secondes pour passer. Attention aux pics !', ({ rect, put }) => {
     put(10, 4, '*'); // étoile cachée
-    put(4, 13, '1'); // plaque lourde : les deux joueurs dessus
+    put(4, 13, 'j'); // ressort 1
+    rect(6, 9, 5, 1); // terrasse 1
+    put(8, 8, '1'); // plaque 1 (ouvre la grille a)
+    rect(9, 14, 3, 1, '^');
+    rect(12, 1, 1, 13, 'a');
+    put(15, 13, 'j'); // ressort 2
+    rect(17, 9, 4, 1); // terrasse 2
+    put(18, 8, 'K');
+    put(20, 8, '2'); // plaque 2 (ouvre la grille b)
+    rect(22, 1, 1, 13, 'b');
+    rect(23, 14, 2, 1, '^');
+    put(26, 13, 'D');
+    put(2, 13, 'S');
+  }, { latch: { 1: 110, 2: 110 } }),
+
+  make('Haute voltige', 'Trois plaques lourdes : il faut être DEUX dessus pour les enfoncer, et les grilles se referment vite. Posez-vous ensemble sur la première, filez jusqu’au premier ressort ; sur la corniche, deuxième plaque, puis ressort et clé tout en haut ; troisième plaque, et redescendez à deux sans traîner !', ({ rect, put }) => {
+    put(26, 2, '*'); // étoile cachée
+    put(4, 13, '1');
     put(5, 13, '1');
-    rect(8, 1, 1, 13, 'a'); // porte du ressort
-    put(10, 13, 'j'); // 1er ressort
-    rect(13, 9, 4, 1); // corniche A
-    put(15, 8, 'j'); // 2e ressort
-    rect(19, 4, 6, 1); // corniche B (en haut)
+    rect(8, 1, 1, 13, 'a');
+    put(10, 13, 'j');
+    rect(13, 9, 4, 1);
+    put(13, 8, '3');
+    put(14, 8, '3');
+    put(16, 8, 'j');
+    rect(18, 1, 1, 8, 'c');
+    rect(19, 4, 6, 1);
     put(20, 3, 'K');
-    put(22, 3, '2'); // 2e plaque lourde, tout en haut
+    put(22, 3, '2');
     put(23, 3, '2');
-    rect(25, 1, 1, 13, 'b'); // porte de sortie : elle ne reste ouverte que quelques secondes
+    rect(25, 1, 1, 13, 'b');
+    rect(10, 14, 6, 1, '^');
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { heavy: [1, 2], latch: { 1: 150, 2: 480 } }),
-  make('Nénuphars', 'Les nénuphars coulent et remontent en rythme (les cases pointillées sont immergées) : ne restez pas dessus quand ils plongent ! Sautez sur le suivant dès qu’il est émergé. Les pics en bas ne pardonnent pas.', ({ rect, put }) => {
-    put(25, 9, '*'); // étoile cachée
-    rect(4, 14, 22, 1, '^'); // pics de x=4 à x=25
-    rect(5, 13, 3, 1, 'w'); // nénuphars du groupe 1 (rose)
-    rect(10, 13, 3, 1, 'v'); // nénuphars du groupe 2 (bleu) : en alternance
-    rect(15, 13, 3, 1); // îlot fixe (checkpoint)
-    put(16, 12, 'C');
-    rect(20, 13, 3, 1, 'w');
-    rect(24, 13, 2, 1, 'v');
-    put(21, 12, 'K');
+  }, { heavy: [1, 2, 3], latch: { 1: 90, 2: 150, 3: 80 } }),
+
+  make('Nénuphars', 'Les nénuphars coulent et remontent en vague (les cases pointillées sont immergées) : sautez sur le suivant dès qu’il émerge, sans vous arrêter ! Sur l’îlot, posez-vous à deux sur les plaques pour ouvrir la grille, prenez la clé, et repartez dans le rythme.', ({ rect, put }) => {
+    put(14, 6, '*'); // étoile cachée
+    rect(4, 14, 22, 1, '^');
+    rect(5, 13, 3, 1, 'w'); // vague : w (groupe 1) puis v (2) puis u (3)...
+    rect(9, 13, 3, 1, 'v');
+    rect(13, 12, 3, 1, 'u');
+    rect(17, 13, 4, 1); // îlot
+    put(17, 12, 'C');
+    put(18, 12, '1');
+    put(19, 12, '1');
+    put(20, 12, 'K');
+    rect(21, 1, 1, 13, 'a');
+    rect(23, 13, 2, 1, 'w');
     put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { shutters: { 1: { period: 240, open: 60, phase: 0 }, 2: { period: 240, open: 60, phase: 120 } } }),
+  }, { heavy: [1], latch: { 1: 150 }, shutters: { 1: { period: 240, open: 100, phase: 100 }, 2: { period: 240, open: 100, phase: 20 }, 3: { period: 240, open: 100, phase: 180 } } }),
+
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
   make('Premier feu', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Le Mage touche le cristal, puis l’Archer allume la torche.', ({ rect, put }) => {
     put(27, 7, '*'); // étoile cachée
