@@ -1671,6 +1671,18 @@ $('btn-help').onclick = () => (level ? openHelpByHand() : null);
 $('btn-hint').addEventListener('mousedown', (e) => e.preventDefault());
 $('btn-hint').onclick = () => revealHint();
 
+// Retour au salon (choix des personnages et du niveau) sans quitter la room : en pleine partie, on demande confirmation par un second appui
+let lobbyAskAt = -1e9;
+function backToLobbyAsk() {
+  if (!level) return;
+  const now = performance.now();
+  if (now - lobbyAskAt < 3500) { lobbyAskAt = -1e9; return send({ t: 'tolobby' }); }
+  lobbyAskAt = now;
+  toast('Retour au salon ? Rappuyez sur B pour confirmer (niveau abandonné).');
+}
+$('btn-lobby').addEventListener('mousedown', (e) => e.preventDefault());
+$('btn-lobby').onclick = () => backToLobbyAsk();
+
 /* ---------- Tutoriel : une consigne à la fois ---------- */
 // Le serveur valide chaque touche (étape « step ») ; ici on n'affiche que la prochaine consigne utile pour ce joueur.
 // L'ordre de la liste est l'ordre du parcours. Une étape avec « kit » ne s'affiche que pour ce rôle (les rôles sont fixes).
@@ -2169,6 +2181,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyF' && !e.repeat) return grabPartner();
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
+  if (e.code === 'KeyB' && !e.repeat) return backToLobbyAsk();
   if (e.code === 'KeyK' && !e.repeat) return cast(2);
   if (e.code === 'KeyE' && !e.repeat) return cast(3);
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyL') && !e.repeat) {
@@ -3944,6 +3957,7 @@ if (window.Progress) {
     toast,
     replay: () => send({ t: 'restart' }), // écran de résultat : le chef rejoue le niveau
     next: () => send({ t: 'skip' }), // ... ou passe à la suite
+    lobby: () => send({ t: 'tolobby' }), // ... ou revient au salon (la room et les deux joueurs restent)
     help: () => send({ t: 'help' }), // l'indice consulté par un joueur compte pour tout le duo
   });
 }
