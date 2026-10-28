@@ -252,7 +252,7 @@ const LEVELS = [
     rect(22, 1, 2, 13); // mur jusqu’au plafond
     rect(22, 10, 2, 1, 'v'); // meurtrière à volet
     rect(22, 11, 2, 3, 'b'); // grille au pied du mur
-    put(26, 12, 'p'); // cible derrière le mur
+    put(25, 12, 'p'); // cible derrière le mur
     rect(14, 10, 3, 1); // corniche de la clé : l’Archer seul
     put(15, 9, 'K');
     put(27, 13, 'D');
@@ -577,6 +577,24 @@ const LEVELS = [
     sequence: { group: 3, order: [2, 1, 3, 0, 2, 0, 3, 1], timeout: 300 },
     labels: [{ tx: 3, ty: 7, shapes: [2, 1, 3, 0, 2, 0, 3, 1], role: 'archer', radius: 150 }],
   }),
+
+  make('La cadence', 'L’Archer prend la clé sur sa corniche, puis franchit le gouffre en dash. Le Mage le vise avec l’éclair d’échange (bouton Échange / touche E) pour prendre sa place de l’autre côté ; l’Archer refait ensuite le saut. Le mur a une fente qui s’ouvre en rythme : tirez sur la cible derrière, la porte basse s’ouvre. Enfin, à deux sur les plaques lourdes : la grille retombe vite, courez vers la porte !', ({ rect, put }) => {
+    put(4, 7, '*'); // étoile cachée : au-dessus de la corniche de la clé
+    rect(3, 10, 3, 1); // corniche de la clé
+    put(4, 9, 'K');
+    rect(10, 14, 10, 1, '^'); // gouffre x=10..19
+    put(9, 13, 'C');
+    put(20, 13, 'C');
+    rect(22, 1, 2, 13); // mur épais
+    rect(22, 12, 2, 1, 'w'); // fente à volet
+    rect(22, 13, 2, 1, 'b'); // porte basse
+    put(25, 12, 'p'); // cible derrière le mur
+    put(24, 13, '1'); // plaques lourdes devant la sortie
+    put(25, 13, '1');
+    rect(26, 1, 1, 13, 'a'); // dernière grille
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, { abilities: true, swap: true, heavy: [1], latch: { 1: 60 }, hold: { 2: 900 }, shutters: { 1: { period: 150, open: 80, phase: 0 } } }),
 
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
