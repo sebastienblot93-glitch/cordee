@@ -282,11 +282,11 @@ const LEVELS = [
 
   make('Le relais', 'Seul l’Archer peut grimper sur la corniche de la plaque de gauche. Seul le Mage passe sous la haute plateforme. Chacun tient une plaque pour ouvrir le passage de l’autre, puis il faut être DEUX sur la plaque lourde pour sortir.', ({ rect, put }) => {
     put(10, 5, '*'); // étoile cachée
-    rect(3, 9, 3, 1); // corniche : l’Archer seul
-    put(4, 8, '1'); // plaque A (ouvre la grille du couloir bas)
-    rect(7, 8, 14, 1); // haute plateforme
-    rect(8, 9, 1, 5, 'a'); // grille du couloir bas
-    put(11, 13, '2'); // plaque B (ouvre la grille du couloir haut)
+    rect(4, 10, 3, 1); // corniche : l’Archer seul
+    put(5, 9, '1'); // plaque A (ouvre la grille du couloir bas)
+    rect(8, 8, 13, 1); // haute plateforme
+    rect(9, 9, 1, 5, 'a'); // grille du couloir bas
+    put(12, 13, '2'); // plaque B (ouvre la grille du couloir haut)
     rect(14, 1, 1, 7, 'b'); // grille du couloir haut
     put(19, 7, 'K');
     rect(15, 14, 5, 1, '^'); // pics sous la plateforme
