@@ -677,29 +677,31 @@ const LEVELS = [
     labels: [{ tx: 2, ty: 8, shapes: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], role: 'archer', radius: 190 }],
   }),
 
-  make('Le Donjon', 'La dernière épreuve avant le Gardien, et la plus dure. 1) L’Archer embrase le mur de bois. 2) Posez-vous À DEUX sur la plaque lourde et passez la grille avant qu’elle ne retombe. 3) Salle des sceaux : le Mage touche le cristal pendant que l’Archer tire sur la cible ET allume la torche, le tout en moins de 2 secondes. 4) Les dalles montent en vague au-dessus des pics, d’une à l’autre sans vous arrêter. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
-    put(26, 6, '*'); // étoile cachée, au-dessus de la corniche de la clé
-    rect(3, 1, 1, 13, 't'); // mur de bois (flèche de feu)
-    put(5, 13, '1'); // plaque lourde
-    put(6, 13, '1');
-    rect(10, 1, 1, 13, 'a'); // grille : la plaque est à 4 cases
-    put(11, 13, 'C');
-    put(13, 5, 'y'); // cristal du Mage (groupe 2)
-    put(16, 3, 'p'); // cible de l'Archer
-    put(17, 8, 'g'); // torche de l'Archer
-    rect(19, 1, 1, 13, 'b'); // grille de la salle des sceaux
-    put(18, 13, 'C');
-    put(20, 13, 'C');
-    rect(21, 14, 7, 1, '^'); // pics de x=21 à x=27
-    rect(22, 13, 2, 1, 'u'); // dalles en vague, de plus en plus hautes
-    rect(24, 12, 2, 1, 'v');
-    rect(26, 11, 2, 1, 'w');
-    rect(28, 10, 1, 4); // pilier de la porte
-    put(28, 9, 'D');
-    rect(23, 9, 3, 1); // corniche de la clé (double saut de l'Archer)
-    put(24, 8, 'K');
+  make('La salle du trône', 'Dernière épreuve avant le Gardien. Étage du bas : plaques lourdes (la herse retombe vite), mur de 3 cases (l’Archer lance le Mage par-dessus, F pour porter et lancer), pics (blocs de glace du Mage), puis le ressort vers l’étage. En haut : l’Archer brûle le mur de bois, la clé, et enfin cristal, cible ET torche en même temps.', ({ rect, put }) => {
+    put(22, 5, '*'); // étoile cachée : étage du haut
+    rect(1, 8, 25, 1); // dalle (trou à x=26..27)
+    put(28, 8, '#');
     put(2, 13, 'S');
-  }, { abilities: true, fire: true, heavy: [1], and: [2], hold: { 2: 120 }, latch: { 1: 80, 2: 80 }, shutters: { 1: { period: 240, open: 140, phase: 220 }, 2: { period: 240, open: 140, phase: 60 }, 3: { period: 240, open: 140, phase: 140 } } }),
+    put(3, 13, '1');
+    put(4, 13, '1');
+    rect(7, 9, 1, 5, 'a'); // herse
+    put(8, 13, 'C');
+    rect(11, 11, 2, 3); // mur de 3 cases
+    put(14, 13, 'C');
+    rect(16, 14, 7, 1, '^'); // pics x=16..22
+    put(18, 13, 'r');
+    put(21, 13, 'r');
+    put(23, 13, 'C');
+    rect(26, 13, 2, 1); // marche du ressort
+    put(26, 12, 'j'); // ressort vers l’étage
+    rect(19, 1, 2, 7, 't'); // mur de bois (étage du haut)
+    put(15, 7, 'K');
+    put(11, 3, 'z'); // cristal (groupe 3)
+    put(8, 5, 'q'); // cible (groupe 3)
+    put(13, 4, 'e'); // torche (groupe 3)
+    rect(5, 1, 1, 7, 'c');
+    put(2, 7, 'D');
+  }, { abilities: true, fire: true, carry: true, heavy: [1], and: [3], hold: { 3: 220 }, latch: { 1: 45, 3: 150 } }),
 
   make('Le Gardien', 'Le boss est protégé par un bouclier. Il tombe quand le Mage touche le cristal (à gauche) ET que l’Archer touche la cible (à droite) en même temps : retouchez-les avant qu’ils ne s’éteignent, et tirez sur le cœur du Gardien tant qu’il est vulnérable ! Chaque attaque est annoncée : rochers (zones rouges), onde de choc (sautez !), boules de feu (un tir les éteint).', ({ rect, put }) => {
     put(3, 5, '*'); // étoile cachée, tout en haut à gauche (l'Archer y monte par double saut, le Mage par l'éclair d'échange)
