@@ -631,29 +631,28 @@ const LEVELS = [
   }, { abilities: true, fire: true, swap: true, sync: true, link: true, heavy: [1, 3], and: [2], hold: { 2: 220 }, latch: { 1: 60, 2: 150, 3: 60 } }),
 
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
-  make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
-    put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
-    rect(3, 1, 1, 13, 't'); // mur de bois (flèche de feu)
-    rect(6, 14, 10, 1, '^'); // douves A : pics de x=6 à x=15 (trop large pour le Mage)
-    put(8, 13, 'r'); // runes : pont de glace
-    put(10, 13, 'r');
-    put(12, 13, 'r');
-    put(16, 13, 'C'); // checkpoint de l'îlot
-    put(16, 6, 'x'); // cristal du Mage
-    put(17, 4, 'o'); // cible de l'Archer
-    put(16, 9, 'f'); // torche de l'Archer
-    rect(18, 1, 1, 13, 'a'); // grille de l'îlot
-    rect(20, 10, 2, 1); // corniche de l'étoile
-    put(20, 13, 'C');
-    rect(22, 14, 6, 1, '^'); // douves B : pics de x=22 à x=27
-    rect(22, 12, 2, 1, 'u'); // dalles à tour de rôle (on monte de 2 cases à chaque fois)
-    rect(25, 10, 2, 1, 'v');
-    rect(23, 6, 2, 1); // corniche de la clé (double saut de l'Archer)
-    put(24, 5, 'K');
-    rect(28, 8, 1, 6); // pilier de la sortie
-    put(28, 7, 'D');
-    put(1, 13, 'S');
-  }, { abilities: true, fire: true, and: [1], hold: { 1: 170 }, latch: { 1: 240 }, shutters: { 2: { period: 240, open: 140, phase: 60 }, 3: { period: 240, open: 140, phase: 140 } } }),
+  make('Le pont-levis', 'Posez-vous à deux sur les plaques : la herse retombe vite. L’Archer prend la clé et brûle le mur de bois. Les douves : le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) — traversez tous les deux avant. Enfin cristal, cible ET torche en même temps ouvrent la dernière grille.', ({ rect, put }) => {
+    put(18, 10, '*'); // étoile cachée : au-dessus du bloc de glace central
+    put(2, 13, 'S');
+    put(3, 13, '1');
+    put(4, 13, '1');
+    rect(7, 1, 1, 13, 'a'); // herse
+    put(8, 13, 'C');
+    rect(8, 10, 2, 1); // corniche de la clé
+    put(9, 9, 'K');
+    rect(11, 1, 2, 13, 't'); // mur de bois
+    put(13, 13, 'C');
+    rect(14, 14, 9, 1, '^'); // douves x=14..22
+    put(15, 13, 'r');
+    put(18, 13, 'r');
+    put(21, 13, 'r');
+    put(23, 13, 'C');
+    put(24, 3, 'y'); // cristal (groupe 2)
+    put(25, 6, 'p'); // cible (groupe 2)
+    put(23, 8, 'g'); // torche (groupe 2)
+    rect(26, 1, 1, 13, 'b');
+    put(27, 13, 'D');
+  }, { abilities: true, fire: true, heavy: [1], and: [2], hold: { 2: 200 }, latch: { 1: 50, 2: 150 } }),
 
   make('Les Oubliettes', 'Deux épreuves. 1) L’Archer monte sur la corniche de gauche : lui seul voit la séquence de 5 symboles. Il la dicte, le Mage touche les trois cristaux dans cet ordre (moins de 5 secondes entre deux tirs, une erreur remet tout à zéro). 2) Au-delà de la grille, les pics : l’Archer saute sur la dalle, le Mage échange sa place avec lui (bouton Échange, puis clic sur l’Archer), et ainsi de suite jusqu’en haut. Attention : la dalle du milieu disparaît par moments !', ({ rect, put }) => {
     put(24, 2, '*'); // étoile cachée, au-dessus de la dernière dalle
