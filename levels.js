@@ -124,7 +124,7 @@ const LEVELS = [
 
 
   make('Les remparts', 'Le rempart est trop haut : lancez-en un par-dessus (F pour porter, F pour lancer). De l’autre côté, sa plaque ouvre la poterne. Puis la courte-échelle jusqu’à la corniche (plaque et clé), et enfin le gouffre : le fil vous lie, passez ensemble !', ({ rect, put }) => {
-    put(28, 3, '*'); // étoile cachée : coin haut droit
+    rect(27, 11, 2, 1, '#'); put(27, 10, '*'); // étoile cachée : sur une corniche trop haute pour un seul (courte-échelle)
     // le rempart : 2 cases d'épaisseur, 4 de haut, une poterne (grille A) en bas
     rect(9, 10, 2, 2);
     rect(9, 12, 2, 2, 'a');
@@ -159,7 +159,7 @@ const LEVELS = [
   }, { abilities: true, and: [1], hold: { 1: 150 }, latch: { 1: 150 } }),
 
   make('Pont de glace', 'Un gouffre immense. Le Mage fait naître des blocs de glace sur les runes (clic droit, 3 blocs au plus, ils fondent en 10 s). L’Archer, lui, le franchit d’un double saut et d’un dash. Un cristal derrière le gouffre ouvre la grille.', ({ rect, put }) => {
-    put(27, 1, '*'); // étoile cachée
+    rect(26, 11, 3, 1, '#'); put(27, 10, '*'); // étoile cachée
     rect(7, 14, 10, 1, '^'); // gouffre de 10 cases
     put(9, 13, 'r');
     put(12, 13, 'r');
@@ -172,7 +172,7 @@ const LEVELS = [
   }, { abilities: true, hold: { 1: 0 } }),
 
   make('Meurtrière', 'Le mur ne s’ouvre que par la meurtrière, et elle ne s’ouvre que par moments. L’Archer tire sur la cible au bon moment ; le Mage touche le cristal pendant que la cible est active. Puis passez la grille ensemble.', ({ rect, put }) => {
-    put(27, 2, '*'); // étoile cachée
+    rect(21, 11, 3, 1, '#'); put(22, 10, '*'); // étoile cachée
     put(4, 8, 'x'); // cristal du Mage
     rect(12, 1, 2, 13);
     rect(12, 8, 2, 1, 'w'); // meurtrière à volet
@@ -224,7 +224,7 @@ const LEVELS = [
 
   /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
   make('Les symboles', 'Six symboles s’affichent uniquement pour l’Archer, sur sa corniche. Il les dicte au Mage, qui touche les trois cristaux dans cet ordre (moins de 7 secondes entre deux tirs, une erreur remet tout à zéro). Au-delà : une plaque, une clé en hauteur, et une grille qui se referme vite.', ({ rect, put }) => {
-    put(17, 1, '*'); // étoile cachée
+    rect(15, 11, 3, 1, '#'); put(16, 10, '*'); // étoile cachée
     rect(2, 9, 4, 1); // corniche de l’indice : l’Archer seul y monte
     put(17, 3, 'z'); // cristal n°0
     put(9, 5, 'z'); // cristal n°1
@@ -339,7 +339,7 @@ const LEVELS = [
   }, { heavy: [1, 2, 3], latch: { 1: 90, 2: 150, 3: 80 } }),
 
   make('Les lotus', 'Les nénuphars coulent et remontent en vague (les cases pointillées sont immergées) : sautez sur le suivant dès qu’il émerge, sans vous arrêter ! Sur l’îlot, posez-vous à deux sur les plaques pour ouvrir la grille, prenez la clé, et repartez dans le rythme.', ({ rect, put }) => {
-    put(14, 6, '*'); // étoile cachée
+    put(14, 10, '*'); // étoile cachée
     rect(4, 14, 22, 1, '^');
     rect(5, 13, 3, 1, 'w'); // vague : w (groupe 1) puis v (2) puis u (3)...
     rect(9, 13, 3, 1, 'v');
@@ -357,7 +357,7 @@ const LEVELS = [
 
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
   make('Le bûcher', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Derrière : cristal du Mage et torche de l’Archer doivent brûler en même temps. Puis un second mur de bois, une clé, et une dernière torche.', ({ rect, put }) => {
-    put(13, 1, '*'); // étoile cachée
+    rect(14, 11, 2, 1, '#'); put(15, 10, '*'); // étoile cachée
     rect(6, 1, 2, 13, 't'); // mur de bois n°1
     put(11, 4, 'x'); // cristal
     put(14, 6, 'f'); // torche
@@ -371,7 +371,7 @@ const LEVELS = [
   }, { abilities: true, fire: true, and: [1], hold: { 1: 420, 2: 0 }, latch: { 1: 200 } }),
 
   make('Les quatre braseros', 'La porte exige quatre flammes en même temps : le cristal du Mage et les trois torches de l’Archer. Elles s’éteignent vite, et le bois qui protège la dernière torche doit brûler d’abord !', ({ rect, put }) => {
-    put(16, 2, '*'); // étoile cachée
+    rect(13, 11, 3, 1, '#'); put(14, 10, '*'); // étoile cachée
     rect(8, 12, 1, 2);
     rect(18, 12, 1, 2);
     put(5, 4, 'f');
@@ -415,7 +415,7 @@ const LEVELS = [
 
   /* ===== Chapitre 7 : Les Brumes (éclair d’échange) ===== */
   make('Le passage', 'Le bois d’abord, puis cristal ET torche ensemble. Ensuite le gouffre est trop large pour le Mage : l’Archer le franchit au dash, puis le Mage vise l’Archer avec l’éclair d’échange (bouton Échange, puis clic sur lui) et prend sa place de l’autre côté — l’Archer se retrouve alors de l’autre côté, à vous de le faire revenir !', ({ rect, put }) => {
-    put(10, 2, '*'); // étoile cachée
+    put(9, 9, '*'); // étoile cachée
     rect(6, 1, 2, 13, 't'); // mur de bois
     put(9, 13, 'C');
     put(11, 5, 'f'); // torche
