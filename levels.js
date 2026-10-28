@@ -775,6 +775,49 @@ const LEVELS = [
     tutorial: { group: 3 },
   }),
 
+  /* ===== Hors chapitres : le Défi (accessible uniquement depuis le menu de sélection) ===== */
+  make('Le Défi', 'Trois salles, et la sortie est restée au pied du puits : il faudra tout refaire dans l’autre sens ! Salle 1 : zigzag de piliers au-dessus des pointes (à la limite du saut du Mage), puis un vide que seul l’Archer franchit : le Mage s’échange avec lui (bouton Échange), puis posez-vous à deux sur les plaques. Salle 2 : l’Archer embrase le bois, le Mage bâtit un pont de glace sur les runes, puis cristal et torche en même temps ouvrent la trappe. Salle 3 : de pilier en pilier jusqu’à la clé, puis rebondissez sur le ressort pour remonter.', ({ rect, put }) => {
+    // ---- Salle 1 : le puits de pointes (x 1..11), on y monte en zigzag, la sortie est au pied du puits
+    rect(1, 14, 3, 1); // le seuil
+    rect(4, 14, 8, 1, '^'); // pointes au fond
+    put(7, 12, '#'); // A
+    put(8, 12, '^');
+    rect(1, 10, 2, 1); // B
+    put(7, 8, '#'); // C
+    put(8, 8, '^');
+    rect(1, 6, 2, 1); // D : dernier perchoir, avec un drapeau
+    put(1, 5, 'C');
+    put(7, 7, 'C');
+    rect(3, 1, 8, 1, '^'); // pointes au plafond, au-dessus du grand saut
+    rect(10, 6, 2, 1); // F : plateforme des plaques, 7 cases de vide plus loin
+    put(10, 5, '1');
+    put(11, 5, '1');
+    rect(12, 1, 2, 13); // le mur
+    rect(12, 2, 2, 4, 'a'); // grille A
+    // ---- Salle 2 : le laboratoire (x 14..28, étage)
+    rect(14, 6, 15, 1); // plancher
+    put(14, 5, 'C');
+    rect(16, 1, 2, 5, 't'); // bois
+    rect(19, 6, 6, 1, '^'); // fosse
+    put(21, 6, 'r'); // runes : le Mage y pose de la glace
+    put(23, 6, 'r');
+    rect(19, 1, 6, 2); // plafond bas au-dessus de la fosse
+    put(25, 2, 'y'); // cristal
+    put(27, 3, 'g'); // torche
+    rect(27, 6, 2, 1, 'b'); // trappe B vers la salle 3
+    // ---- Salle 3 : la chute (x 14..28, rez-de-chaussée)
+    rect(14, 14, 14, 1, '^');
+    rect(25, 10, 4, 1); // Q0 : réception sous la trappe
+    put(25, 9, 'C');
+    put(28, 9, 'j'); // ressort : le retour vers la salle 2
+    put(20, 11, '#'); // Q1
+    put(15, 12, '#'); // Q2
+    put(14, 10, '#'); // pilier de la clé
+    put(14, 9, 'K');
+    put(2, 13, 'D');
+    put(3, 13, 'S');
+  }, { abilities: true, fire: true, swap: true, carry: true, challenge: true, heavy: [1], and: [2], latch: { 1: 99999, 2: 99999 }, hold: { 2: 240 } }),
+
 ];
 
 // Chapitres : thème graphique, texte d'introduction et nombre de niveaux (dans l'ordre de LEVELS)
@@ -789,6 +832,7 @@ const CHAPTERS = [
   { name: 'Le Sommet', theme: 'summit', count: 6, blurb: 'Le dernier chapitre : six épreuves très difficiles, chronos serrés. Les trois premières sont dures, les trois dernières extrêmes. Parlez-vous, répartissez-vous, et ne lâchez rien.', powers: ['Plaque lourde : il faut être deux dessus pour l’enfoncer', 'Tout ce que vous avez appris, d’affilée'] },
   { name: 'La Citadelle', theme: 'citadel', count: 4, blurb: 'Le dernier rempart. Un gardien veille, et il ne se laissera pas faire.', powers: ['Bouclier du boss : cristal du Mage ET cible de l’Archer en même temps', 'Barre de vie du boss en haut, cœurs de l’équipe en dessous'] },
   { name: 'Tutoriel', theme: 'prairie', count: 1, tutorial: true, blurb: 'Avant de partir à l’ascension : apprenez toutes les touches, à deux. Vous pouvez aussi passer le tutoriel.', powers: ['Une consigne à la fois, validée dès que vous faites la touche', 'Le chef de room peut passer le tutoriel'] },
+  { name: 'Le Défi', theme: 'citadel', count: 1, challenge: true, blurb: 'Hors des chapitres : l’épreuve ultime. Trois salles, des sauts au millimètre, aucune seconde de répit. À réserver aux duos qui ont tout terminé.', powers: ['Chaque salle a son drapeau : on y réapparaît après une chute', 'Tous vos pouvoirs servent, et il faudra tout donner'] },
 ];
 
 let _c = 0;
@@ -826,6 +870,7 @@ const TIMERS = {
   'Le passage': 60, 'La colonne': 60, 'La brume épaisse': 85, 'Le col': 75, // chapitre 7 : les Brumes
   'Bivouac': 85, 'Le carillon': 95, 'Le boyau': 150, 'Le code': 150, 'La cadence': 65, 'La cime': 125, // chapitre 8 : le Sommet
   'Tutoriel': 0, 'Le pont-levis': 60, 'Le cachot': 135, 'La salle du trône': 95, 'Le Gardien': 240, // chapitre 9 : la Citadelle
+  'Le Défi': 600, // hors chapitres
 };
 LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 
@@ -844,9 +889,10 @@ const REF = {
   'Le passage': 8.6, 'La colonne': 8.1, 'La brume épaisse': 10.6, 'Le col': 10.4,
   'Bivouac': 12.0, 'Le carillon': 13.3, 'Le boyau': 23.1, 'Le code': 24.3, 'La cadence': 9.2, 'La cime': 17.9,
   'Le pont-levis': 8.6, 'Le cachot': 16.8, 'La salle du trône': 13.6,
+  'Le Défi': 26.9,
 };
 // Le combat de boss dure plus longtemps qu'un niveau : temps fixés à la main [or, argent, diamant]
-const MEDALS = { 'Le Gardien': [110, 170, 65] };
+const MEDALS = { 'Le Gardien': [110, 170, 65], 'Le Défi': [300, 480, 200] };
 LEVELS.forEach((l) => {
   const m = MEDALS[l.name];
   const ref = REF[l.name] || (l.timer || 90) / 8;

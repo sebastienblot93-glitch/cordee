@@ -200,6 +200,8 @@
     return t;
   }
   const starCount = () => Object.keys(data.stars).length;
+  // Le niveau Défi n'est dans aucun chapitre : pas de numéro devant son nom
+  const chapLabel = (c) => { const ch = (catalog.chapters || [])[c] || {}; return ch.challenge ? `★ ${ch.name || 'Défi'} (hors chapitres)` : `${c + 1}. ${ch.name || ''}`; };
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -226,7 +228,7 @@
     lv.forEach((l, i) => {
       if (l.chapter !== lastCh) {
         lastCh = l.chapter;
-        root.append(el('div', 'side-ch', `${l.chapter + 1}. ${(catalog.chapters[l.chapter] || {}).name || ''}`));
+        root.append(el('div', 'side-ch', chapLabel(l.chapter)));
         box = el('div', 'side-list');
         root.append(box);
       }
@@ -330,7 +332,7 @@
     lv.forEach((l) => {
       if (l.chapter !== lastCh) {
         lastCh = l.chapter;
-        root.append(el('div', 'side-ch', `${l.chapter + 1}. ${(catalog.chapters[l.chapter] || {}).name || ''}`));
+        root.append(el('div', 'side-ch', chapLabel(l.chapter)));
         box = el('div', 'star-grid');
         root.append(box);
       }
@@ -481,10 +483,11 @@
       persist();
       info = { prev, newBest, noDeath, noHelp };
     }
-    if (finished) { setFurthest(-1); persist(); } // partie terminée : plus rien à reprendre
+    const isChallenge = !!(l && l.challenge);
+    if (finished && !isChallenge) { setFurthest(-1); persist(); } // partie terminée : plus rien à reprendre
     renderAll();
 
-    $('res-title').textContent = finished ? 'Bravo, vous avez terminé tous les niveaux !' : skipped ? 'Niveau passé' : 'Niveau réussi !';
+    $('res-title').textContent = isChallenge && finished && !skipped ? 'Défi relevé : bravo, vous êtes des légendes !' : finished ? 'Bravo, vous avez terminé tous les niveaux !' : skipped ? 'Niveau passé' : 'Niveau réussi !';
     const medalEl = $('res-medal');
     medalEl.className = `medal ${medal || 'none'}`;
     medalEl.textContent = medal ? MEDALS[medal].emoji : '➜';
@@ -515,7 +518,7 @@
       if (l.star) add(res.star, '★ Étoile trouvée', '☆ Étoile manquée');
     }
     $('res-total').textContent = '';
-    if (finished) {
+    if (finished && !isChallenge) {
       const cnt = { 4: 0, 3: 0, 2: 0, 1: 0 };
       catalog.levels.forEach((x) => { const b = data.best[x.name]; if (b) cnt[b.m || 1]++; });
       $('res-total').textContent = `Médailles : 💎 ${cnt[4]}  🥇 ${cnt[3]}  🥈 ${cnt[2]}  🥉 ${cnt[1]} · Étoiles : ★ ${starCount()}/${catalog.levels.length} (${titleFor(starCount())})`;
@@ -554,8 +557,9 @@
         hideResult();
         return;
       }
-      cur = { index: msg.index, name: msg.name, diamond: msg.diamond, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false };
-      if (msg.index > data.furthest) { setFurthest(msg.index); persist(); }
+      const isChallenge = !!(msg.chapter && msg.chapter.challenge); // le niveau Défi est hors parcours : il ne compte pas pour « Reprendre ma partie »
+      cur = { index: msg.index, name: msg.name, diamond: msg.diamond, gold: msg.gold, silver: msg.silver, timer: msg.timer, star: !!msg.star, help: false, challenge: isChallenge };
+      if (!isChallenge && msg.index > data.furthest) { setFurthest(msg.index); persist(); }
       hideResult();
       renderAll();
     },

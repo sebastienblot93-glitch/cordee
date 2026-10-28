@@ -1562,7 +1562,7 @@ function revealHint() {
 }
 function showChapterCard(ch) {
   const el = $('chapter-card');
-  $('chapter-num').textContent = ch.tutorial ? 'Tutoriel' : `Chapitre ${ch.index + 1}`;
+  $('chapter-num').textContent = ch.tutorial ? 'Tutoriel' : ch.challenge ? 'Hors chapitres' : `Chapitre ${ch.index + 1}`;
   $('chapter-name').textContent = ch.name;
   $('chapter-blurb').textContent = ch.blurb || '';
   const ul = $('chapter-powers');
@@ -1596,7 +1596,7 @@ function updateBanner() {
 function updateHud() {
   if (!level) return;
   const ch = level.chapter;
-  $('hud-level').textContent = ch.tutorial ? 'Tutoriel · Apprenez toutes les touches' : `${ch.name} · Niveau ${level.index + 1}/${level.total} : ${level.name}`;
+  $('hud-level').textContent = ch.tutorial ? 'Tutoriel · Apprenez toutes les touches' : ch.challenge ? `Hors chapitres · ${level.name}` : `${ch.name} · Niveau ${level.index + 1}/${level.total} : ${level.name}`;
   const parts2 = [];
   if (level.keys.length) parts2.push(`Clés ${world.keys.length}/${level.keys.length}`);
   if (world.deaths) parts2.push(`Chutes ${world.deaths}`);
@@ -2130,12 +2130,12 @@ function renderLobby() {
       if (l.chapter !== lastCh) {
         lastCh = l.chapter;
         group = document.createElement('optgroup');
-        group.label = l.tutorial ? 'Tutoriel (à deux)' : `Chapitre ${l.chapter + 1} · ${(chapterList[l.chapter] || {}).name || ''}`;
+        group.label = l.tutorial ? 'Tutoriel (à deux)' : l.challenge ? 'Défi (hors chapitres) · extrêmement difficile' : `Chapitre ${l.chapter + 1} · ${(chapterList[l.chapter] || {}).name || ''}`;
         sel.append(group);
       }
       const o = document.createElement('option');
       o.value = i;
-      o.textContent = l.tutorial ? 'Tutoriel : apprendre toutes les touches' : `${i + 1}. ${l.name}${l.roles ? ' (Mage + Archer)' : ''}`;
+      o.textContent = l.tutorial ? 'Tutoriel : apprendre toutes les touches' : l.challenge ? `★ ${l.name}${l.roles ? ' (Mage + Archer)' : ''}` : `${i + 1}. ${l.name}${l.roles ? ' (Mage + Archer)' : ''}`;
       group.append(o);
     });
     sel.value = current || '0';

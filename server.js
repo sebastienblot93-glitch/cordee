@@ -46,8 +46,8 @@ app.get('/diag', async (req, res) => {
   const size = (p) => (fs.existsSync(p) ? fs.statSync(p).size + ' octets' : 'MANQUANT');
   const lines = [
     'Cordée - ' + BUILD,
-    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 35, dont le tutoriel)',
-    'Chapitres : ' + CHAPTERS.length + ' (attendu : 10)',
+    'Niveaux dans levels.js : ' + LEVELS.length + ' (attendu : 36, dont le tutoriel et le défi)',
+    'Chapitres : ' + CHAPTERS.length + ' (attendu : 11, dont le tutoriel et le défi)',
     'Sauvegarde des records : ' + (storeMode === 'upstash' ? 'en ligne (Upstash) - durable' : storeMode === 'file' ? 'fichier local - effacé à chaque redémarrage sur Render' : 'mémoire - perdue au redémarrage') + ' (savedata.js : ' + size(path.join(__dirname, 'savedata.js')) + ')',
     ...(storeMode === 'upstash' ? await upstashDiag() : []),
     '',
@@ -66,9 +66,9 @@ app.get('/api/levels', (req, res) => {
   res.json({
     levels: LEVELS.map((l) => ({
       name: l.name, chapter: l.chapter, timer: l.timer || 0, diamond: l.diamond, gold: l.gold, silver: l.silver,
-      star: l.rows.some((r) => r.includes('*')), tutorial: !!l.tutorial,
+      star: l.rows.some((r) => r.includes('*')), tutorial: !!l.tutorial, challenge: !!l.challenge,
     })),
-    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
+    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme, challenge: !!c.challenge })),
   });
 });
 
@@ -331,7 +331,7 @@ function tutComplete(room) {
   return ok;
 }
 const TUT_INDEX = LEVELS.findIndex((l) => l.tutorial);
-const REAL_COUNT = TUT_INDEX >= 0 ? LEVELS.length - 1 : LEVELS.length; // niveaux « du parcours » (le tutoriel est à part)
+const REAL_COUNT = TUT_INDEX >= 0 ? TUT_INDEX : LEVELS.length; // niveaux « du parcours » (le tutoriel et le niveau Défi sont à part, placés après)
 const nextIndex = (i) => (LEVELS[i].tutorial ? 0 : i + 1);
 
 /* ---------- Monde : volets, plaques, cristaux, cibles, portes ---------- */
@@ -908,7 +908,7 @@ function chapterInfo(index) {
   const count = LEVELS.filter((l) => l.chapter === def.chapter).length;
   return {
     index: def.chapter, name: ch.name, theme: ch.theme, blurb: ch.blurb, powers: ch.powers || [],
-    pos: index - first + 1, count, first: index === first, tutorial: !!def.tutorial,
+    pos: index - first + 1, count, first: index === first, tutorial: !!def.tutorial, challenge: !!def.challenge,
   };
 }
 
@@ -1187,8 +1187,8 @@ function lobbyMsg(room) {
     code: room.code,
     hostId: room.hostId,
     status: room.status,
-    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities, chapter: l.chapter, tutorial: !!l.tutorial })),
-    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme })),
+    levels: LEVELS.map((l) => ({ name: l.name, roles: !!l.abilities, chapter: l.chapter, tutorial: !!l.tutorial, challenge: !!l.challenge })),
+    chapters: CHAPTERS.map((c) => ({ name: c.name, theme: c.theme, challenge: !!c.challenge })),
     players: [...room.players.values()].map((p) => ({ id: p.id, name: p.name, color: p.color, role: p.role, skin: p.skin })),
   };
 }
