@@ -173,10 +173,23 @@
     #move-help { margin: .5rem 0 0; }
     #under { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
     #under-main { flex: 1; min-width: min(100%, 420px); }
-    #yt-wrap { display: none; flex: none; width: 200px; margin: .6rem auto 0; text-align: center; }
+    #side-col { flex: none; width: 220px; margin: .6rem auto 0; display: flex; flex-direction: column; gap: .6rem; }
+    #yt-wrap { display: none; flex: none; width: 200px; margin: 0 auto; text-align: center; }
     #yt-wrap.show { display: block; }
     #yt-wrap iframe, #yt-wrap audio { width: 200px; height: 200px; border: 0; border-radius: 8px; background: #000; display: block; }
     #yt-title { font-size: .7rem; margin-top: .2rem; }
+    /* Chat de la room */
+    #chat { display: flex; flex-direction: column; background: var(--night-2); border: 2px solid #4a4a8a; border-radius: 8px; overflow: hidden; transition: border-color .3s, box-shadow .3s; }
+    #chat.new { border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+    #chat:focus-within { border-color: var(--accent); }
+    #chat-log { height: 130px; overflow-y: auto; padding: .4rem .5rem; font-size: .78rem; line-height: 1.3; text-align: left; overflow-wrap: anywhere; }
+    #chat-log p { margin: 0 0 .25rem; }
+    #chat-log p.hint { margin: 0; }
+    #chat-log b { font-weight: 700; }
+    #chat-form { display: flex; border-top: 2px solid #4a4a8a; }
+    #chat-input { flex: 1; min-width: 0; border: 0; border-radius: 0; background: rgba(13, 13, 38, .6); color: var(--chalk); padding: .4rem .5rem; font-size: .8rem; }
+    #chat-input:focus { outline: none; }
+    #chat-send { border: 0; border-left: 2px solid #4a4a8a; border-radius: 0; padding: .3rem .6rem; font-size: .75rem; }
     .hint kbd, #help kbd {
       font-family: 'Silkscreen', monospace; font-size: .75rem; padding: 1px 6px; border-radius: 4px;
       background: var(--night-2); border: 1px solid #4a4a8a; color: var(--chalk);
@@ -486,9 +499,18 @@
         <p id="move-help" class="hint"></p>
         <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>B</kbd> retour au salon · <kbd>P</kbd> coupe le son · <kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> emotes · <kbd>Maj</kbd> dash<button id="btn-lobby" class="ghost" type="button" title="Revenir au choix des personnages et des niveaux, sans quitter la room">Salon (B)</button><button id="btn-help" class="ghost" type="button">Aide (H)</button><button id="btn-hint" class="ghost" type="button">Indice (I)</button></p>
       </div>
-      <div id="yt-wrap">
-        <div id="yt-player"></div>
-        <div id="yt-title" class="hint"></div>
+      <div id="side-col">
+        <div id="yt-wrap">
+          <div id="yt-player"></div>
+          <div id="yt-title" class="hint"></div>
+        </div>
+        <div id="chat" aria-label="Chat de la room">
+          <div id="chat-log" role="log" aria-live="polite"><p id="chat-empty" class="hint">Aucun message pour l’instant.</p></div>
+          <form id="chat-form" autocomplete="off">
+            <input id="chat-input" type="text" maxlength="120" placeholder="Entrée pour écrire…" aria-label="Message">
+            <button id="chat-send" type="submit" class="ghost">OK</button>
+          </form>
+        </div>
       </div>
     </div>
   </section>

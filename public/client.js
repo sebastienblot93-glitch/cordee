@@ -285,6 +285,7 @@ function handle(msg) {
   switch (msg.t) {
     case 'joined':
       myId = msg.id;
+      clearChat();
       break;
     case 'error':
       setError(msg.msg);
@@ -315,6 +316,9 @@ function handle(msg) {
       break;
     case 'emote':
       onEmote(msg);
+      break;
+    case 'chat':
+      onChat(msg);
       break;
     case 'mark':
       onMark(msg);
@@ -848,6 +852,54 @@ function sendEmote(n) {
   lastEmoteAt = now;
   send({ t: 'emote', e: n });
 }
+
+/* ---------- Chat textuel (colonne de droite, sous le jeu) ---------- */
+const chatEl = { log: null, input: null, box: null };
+function clearChat() {
+  const log = $('chat-log');
+  if (!log) return;
+  log.innerHTML = '<p id="chat-empty" class="hint">Aucun message pour l’instant.</p>';
+}
+function onChat(msg) {
+  const log = $('chat-log');
+  if (!log) return;
+  const empty = $('chat-empty');
+  if (empty) empty.remove();
+  const who = players.find((p) => p.id === msg.id);
+  const line = document.createElement('p');
+  const name = document.createElement('b');
+  name.textContent = (who ? who.name : '?') + ' : ';
+  if (who && /^#[0-9a-f]{3,8}$/i.test(who.color)) name.style.color = who.color;
+  line.appendChild(name);
+  line.appendChild(document.createTextNode(String(msg.text)));
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
+  log.appendChild(line);
+  while (log.children.length > 60) log.removeChild(log.firstChild);
+  if (stick || msg.id === myId) log.scrollTop = log.scrollHeight;
+  if (msg.id !== myId) {
+    const box = $('chat');
+    box.classList.add('new');
+    clearTimeout(onChat.timer);
+    onChat.timer = setTimeout(() => box.classList.remove('new'), 1500);
+  }
+}
+function chatFocused() { return document.activeElement === $('chat-input'); }
+$('chat-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = $('chat-input');
+  const text = input.value.trim();
+  if (text) send({ t: 'chat', text: text.slice(0, 120) });
+  input.value = '';
+});
+$('chat-input').addEventListener('focus', () => { // on lâche les touches de déplacement déjà enfoncées
+  input.left = input.right = input.jump = false;
+  sendInput();
+});
+$('chat-input').addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') { e.preventDefault(); $('chat-input').blur(); }
+  e.stopPropagation(); // pendant la saisie, aucune touche ne commande le jeu
+});
+$('chat-input').addEventListener('keyup', (e) => e.stopPropagation());
 
 // Temps de jeu : on compte les secondes où une partie est réellement en cours (onglet visible)
 setInterval(() => {
@@ -1627,6 +1679,7 @@ function helpHtml() {
     + (level && level.cfg.heavy && level.cfg.heavy.length ? '<li><b>Plaque lourde</b> : il faut être <b>deux</b> dessus pour l’enfoncer.</li>' : '')
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
     + '<li><kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
+    + '<li><kbd>Entrée</kbd> : écrire dans le chat (colonne de droite), <kbd>Entrée</kbd> pour envoyer, <kbd>Échap</kbd> pour reprendre le jeu</li>'
     + '<li><kbd>Ctrl</kbd> + clic droit : « regarde ici », un repère visible par ton coéquipier</li>'
     + '<li><kbd>P</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
   if (kit === 'mage') {
@@ -2172,6 +2225,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (!level) return;
+  if (e.code === 'Enter' && !e.repeat && !chatFocused() && !(document.activeElement && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(document.activeElement.tagName))) { e.preventDefault(); $('chat-input').focus(); return; }
   if (e.code === 'Escape' && $('help').classList.contains('show')) return hideHelp();
   if (e.code === 'KeyH' && !e.repeat) return $('help').classList.contains('show') ? hideHelp() : openHelpByHand();
   if (e.code === 'KeyI' && !e.repeat) return revealHint();

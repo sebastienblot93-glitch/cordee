@@ -1289,6 +1289,18 @@ wss.on('connection', (ws) => {
         tutStep(room, me, 'emote');
         break;
       }
+      case 'chat': {
+        // Petit chat textuel : relayé à toute la room (au plus un message toutes les 0,6 s par joueur, 120 caractères)
+        const me = room && room.players.get(ws.id);
+        if (!me) return;
+        const text = String(msg.text == null ? '' : msg.text).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+        if (!text) return;
+        const now = Date.now();
+        if (now < (me.chatUntil || 0)) return;
+        me.chatUntil = now + 600;
+        broadcast(room, { t: 'chat', id: ws.id, text });
+        break;
+      }
       case 'mark': {
         // « Regarde ici » (Ctrl + clic droit) : un repère visible par tout le duo, au plus un toutes les 1,2 s par joueur
         const me = room && room.players.get(ws.id);
