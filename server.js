@@ -277,6 +277,7 @@ if (process.env.CORDEE_TEST) global.__wss = wss; // uniquement pour les tests au
 const rooms = new Map(); // code -> room
 if (process.env.CORDEE_TEST) global.__rooms = rooms; // uniquement pour les tests automatiques
 if (process.env.CORDEE_TEST) global.__tick = (room) => tick(room); // idem : permet d'avancer la simulation pas à pas
+if (process.env.CORDEE_TEST) global.__loadScreen = (room, k) => loadScreen(room, k); // idem : saute directement à un écran du Défi
 
 /* ---------- Tutoriel : le carnet des touches ---------- */
 // Chaque étape est validée par le serveur lui-même quand l'action a vraiment eu lieu (sauf H, qui n'existe que dans le navigateur).
@@ -333,6 +334,11 @@ function tutComplete(room) {
 const TUT_INDEX = LEVELS.findIndex((l) => l.tutorial);
 const REAL_COUNT = TUT_INDEX >= 0 ? TUT_INDEX : LEVELS.length; // niveaux « du parcours » (le tutoriel et le niveau Défi sont à part, placés après)
 const nextIndex = (i) => (LEVELS[i].tutorial ? 0 : i + 1);
+
+// Niveaux à plusieurs écrans (le Défi) : `screens` liste des salles séparées. On passe de l'une à l'autre en franchissant la porte,
+// sans écran de résultat : le chrono et le compteur de chutes continuent. Chaque écran peut avoir ses propres options (hint, theme, latch…).
+const screenCount = (def) => (def.screens ? def.screens.length : 1);
+const screenDef = (def, k) => (def.screens ? Object.assign({}, def, def.screens[k]) : def);
 
 /* ---------- Monde : volets, plaques, cristaux, cibles, portes ---------- */
 function holdFor(L, group) {
@@ -913,9 +919,15 @@ function chapterInfo(index) {
 }
 
 function startMsg(room) {
-  const def = LEVELS[room.levelIndex];
+  const base = LEVELS[room.levelIndex];
+  const def = screenDef(base, room.screen || 0);
   return {
     t: 'start',
+    screen: room.screen || 0,
+    screens: screenCount(base),
+    theme: def.theme || undefined, // décor propre à l'écran (facultatif)
+    title: def.title || undefined,
+    deaths: room.deaths || 0,
     level: def.rows,
     tile: TILE,
     index: room.levelIndex,
@@ -946,9 +958,10 @@ function startMsg(room) {
   };
 }
 
-function freshRoomState(room, index) {
-  const def = LEVELS[index];
+function freshRoomState(room, index, screen = 0) {
+  const def = screenDef(LEVELS[index], screen);
   room.levelIndex = index;
+  room.screen = screen;
   room.level = parseLevel(def);
   room.keysTaken = new Set();
   room.time = 0;
@@ -996,6 +1009,16 @@ function loadLevel(room, index) {
   broadcast(room, lobbyMsg(room));
   broadcast(room, startMsg(room));
   if (LEVELS[index].tutorial) broadcast(room, tutMsg(room));
+}
+
+// Écran suivant (ou recommencer l'écran) : le chrono, les chutes et l'aide consultée continuent
+function loadScreen(room, screen) {
+  const keep = { clock: room.clock, deaths: room.deaths, helped: room.helped };
+  freshRoomState(room, room.levelIndex, screen);
+  Object.assign(room, keep);
+  room.status = 'playing';
+  resetPlayers(room);
+  broadcast(room, startMsg(room));
 }
 
 function finishLevel(room, skipped) {
@@ -1124,7 +1147,10 @@ function tick(room) {
 
   if (room.status === 'playing') {
     room.clock++;
-    if (doorOpen(room) && allInDoor(room, list)) finishLevel(room);
+    if (doorOpen(room) && allInDoor(room, list)) {
+      if (room.screen + 1 < screenCount(LEVELS[room.levelIndex])) loadScreen(room, room.screen + 1);
+      else finishLevel(room);
+    }
     else if (room.limit && room.clock >= room.limit) {
       room.status = 'timeup'; // temps écoulé : on laisse lire le message puis le niveau redémarre
       room.timer = 180; // 3 secondes
@@ -1359,6 +1385,7 @@ wss.on('connection', (ws) => {
         if (room.status === 'won' || room.status === 'finished') { // depuis l'écran de résultat : le chef rejoue le niveau
           if (room.hostId !== ws.id) return;
         } else if (room.status !== 'playing') return;
+        if (room.status === 'playing' && LEVELS[room.levelIndex].screens) { loadScreen(room, room.screen); break; } // on ne recommence que la salle en cours
         room.bossResume = 0;
         const keepTut = LEVELS[room.levelIndex].tutorial ? { tut: room.tut, ok: room.tutOk } : null;
         loadLevel(room, room.levelIndex);

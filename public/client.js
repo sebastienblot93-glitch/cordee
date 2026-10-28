@@ -1251,7 +1251,7 @@ const Ghost = {
   // Début de niveau : on prépare l'enregistrement et on charge le fantôme (local, puis celui de l'équipe s'il est plus rapide)
   start(lv) {
     this.startAt = performance.now();
-    if (!this.on || (lv.chapter && lv.chapter.tutorial)) { this.rec = null; this.best = null; return; }
+    if (!this.on || (lv.chapter && (lv.chapter.tutorial || lv.chapter.challenge))) { this.rec = null; this.best = null; return; }
     this.rec = { t0: this.startAt, n: 0, lastIdx: -1, d: [], ids: null, prev: null };
     this.best = this.load(lv.name);
     this.fetched = null;
@@ -1487,10 +1487,11 @@ function startLevel(msg) {
   const chapter = msg.chapter || { index: 0, name: '', theme: 'arcane', pos: 1, count: 1, powers: [] };
   level = {
     rows: msg.level, tile: T, keys, door, index: msg.index, total: msg.total, name: msg.name, hint: msg.hint, chapter,
+    screen: msg.screen || 0, screens: msg.screens || 1, title: msg.title || '',
     timer: msg.timer || 0,
     diamond: msg.diamond || 0, gold: msg.gold || 0, silver: msg.silver || 0,
     star: (L.stars && L.stars[0]) || null, labelSeen: new Set(),
-    theme: chapter.theme,
+    theme: msg.theme || chapter.theme,
     cfg: {
       abilities: !!cfg.abilities, dark: !!cfg.dark, fire: !!cfg.fire, swap: !!cfg.swap,
       seqGroup: cfg.seqGroup || 0, seqLen: cfg.seqLen || 0, labels: cfg.labels || [],
@@ -1503,18 +1504,19 @@ function startLevel(msg) {
   sprites.clear();
   parts.length = 0;
   springAnim.clear();
-  Object.assign(prevWorldInfo, { door: world.door, keys: 0, cps: 0, status: 'playing', deaths: 0, sr: 0 });
+  Object.assign(prevWorldInfo, { door: world.door, keys: 0, cps: 0, status: 'playing', deaths: msg.deaths || 0, sr: 0 });
   setupCanvas();
-  level.bg = window.Themes.makeBackground(level.theme, LW, LH, msg.index + 1, RES);
-  level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, msg.index + 1, RES);
-  level.decor = window.Themes.makeDecor(level.theme, LW, LH, msg.index + 1);
+  const seed = msg.index + 1 + (msg.screen || 0) * 11;
+  level.bg = window.Themes.makeBackground(level.theme, LW, LH, seed, RES);
+  level.tiles = window.Themes.makeTiles(level.theme, msg.level, T, seed, RES);
+  level.decor = window.Themes.makeDecor(level.theme, LW, LH, seed);
   updateVig();
   level.shift = 0;
   irisT = 0;
   shakeMag = 0;
   canvas.style.transform = '';
   level.hintShown = !HINT_HIDDEN;
-  if (window.Progress) { window.Progress.onStart(msg); window.Progress.hideResult(); }
+  if (window.Progress) { if (!(msg.screen > 0)) window.Progress.onStart(msg); window.Progress.hideResult(); }
   updateHintLine();
   armed = 1;
   lastTl = -1;
@@ -1541,6 +1543,8 @@ function startLevel(msg) {
   if (chapter.index !== lastChapter) {
     lastChapter = chapter.index;
     showChapterCard(chapter);
+  } else if (level.screens > 1) {
+    toast(`Salle ${level.screen + 1} / ${level.screens}${level.title ? ' · ' + level.title : ''}`);
   }
 }
 
@@ -1596,7 +1600,7 @@ function updateBanner() {
 function updateHud() {
   if (!level) return;
   const ch = level.chapter;
-  $('hud-level').textContent = ch.tutorial ? 'Tutoriel · Apprenez toutes les touches' : ch.challenge ? `Hors chapitres · ${level.name}` : `${ch.name} · Niveau ${level.index + 1}/${level.total} : ${level.name}`;
+  $('hud-level').textContent = ch.tutorial ? 'Tutoriel · Apprenez toutes les touches' : ch.challenge ? `Hors chapitres · ${level.name} · Salle ${level.screen + 1}/${level.screens}${level.title ? ' : ' + level.title : ''}` : `${ch.name} · Niveau ${level.index + 1}/${level.total} : ${level.name}`;
   const parts2 = [];
   if (level.keys.length) parts2.push(`Clés ${world.keys.length}/${level.keys.length}`);
   if (world.deaths) parts2.push(`Chutes ${world.deaths}`);
