@@ -354,44 +354,49 @@ const LEVELS = [
   }, { heavy: [1], latch: { 1: 150 }, shutters: { 1: { period: 240, open: 100, phase: 100 }, 2: { period: 240, open: 100, phase: 20 }, 3: { period: 240, open: 100, phase: 180 } } }),
 
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
-  make('Premier feu', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Le Mage touche le cristal, puis l’Archer allume la torche.', ({ rect, put }) => {
-    put(27, 7, '*'); // étoile cachée
-    rect(10, 1, 2, 13, 't'); // mur de bois : tout le bois relié brûle
-    put(14, 5, 'x');
-    put(15, 13, 'K');
-    rect(18, 1, 1, 13, 'a');
-    put(22, 6, 'g');
+  make('Le bûcher', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Derrière : cristal du Mage et torche de l’Archer doivent brûler en même temps. Puis un second mur de bois, une clé, et une dernière torche.', ({ rect, put }) => {
+    put(13, 1, '*'); // étoile cachée
+    rect(6, 1, 2, 13, 't'); // mur de bois n°1
+    put(11, 4, 'x'); // cristal
+    put(14, 6, 'f'); // torche
+    rect(17, 1, 1, 13, 'a');
+    rect(20, 1, 2, 13, 't'); // mur de bois n°2
+    put(23, 13, 'K');
+    put(24, 5, 'g'); // dernière torche
     rect(25, 1, 1, 13, 'b');
-    put(28, 13, 'D');
+    put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, fire: true, hold: { 1: 900, 2: 0 } }),
+  }, { abilities: true, fire: true, and: [1], hold: { 1: 420, 2: 0 }, latch: { 1: 200 } }),
 
-  make('Les quatre feux', 'La porte exige quatre flammes en même temps : le cristal du Mage et les trois torches de l’Archer. Soyez rapides, elles s’éteignent !', ({ rect, put }) => {
-    put(16, 5, '*'); // étoile cachée
+  make('Les quatre feux', 'La porte exige quatre flammes en même temps : le cristal du Mage et les trois torches de l’Archer. Elles s’éteignent vite, et le bois qui protège la dernière torche doit brûler d’abord !', ({ rect, put }) => {
+    put(16, 2, '*'); // étoile cachée
     rect(8, 12, 1, 2);
     rect(18, 12, 1, 2);
     put(5, 4, 'f');
     put(13, 4, 'f');
-    put(22, 5, 'f');
+    rect(21, 1, 2, 13, 't'); // bois devant la 3e torche
+    put(24, 4, 'f');
     put(16, 8, 'x');
-    rect(25, 1, 1, 13, 'a');
-    put(27, 13, 'K');
-    put(28, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, fire: true, and: [1], latch: { 1: 600 }, hold: { 1: 600 } }),
-
-  make('Le passeur', 'Le gouffre est trop large pour le Mage. L’Archer le porte (F) jusqu’au bord, puis le lance (F encore) : le Mage garde la touche → enfoncée pendant le vol pour aller loin ! L’Archer franchit le gouffre seul (double saut + dash), brûle le mur de bois, et le Mage touche le cristal.', ({ rect, put }) => {
-    put(13, 7, '*'); // étoile cachée
-    rect(6, 14, 10, 1, '^'); // gouffre de 10 cases : seul l'Archer le franchit seul
-    put(5, 13, 'C');
-    put(17, 13, 'C');
-    rect(21, 1, 2, 13, 't'); // mur de bois
-    put(23, 6, 'x'); // cristal derrière le mur
-    rect(25, 1, 1, 13, 'a');
+    rect(26, 1, 1, 13, 'a');
     put(24, 13, 'K');
     put(27, 13, 'D');
     put(2, 13, 'S');
+  }, { abilities: true, fire: true, and: [1], latch: { 1: 600 }, hold: { 1: 540 } }),
+
+  make('Le passeur', 'Le gouffre est trop large pour le Mage. L’Archer le porte (F) jusqu’au bord, puis le lance (F encore) : le Mage garde la touche → enfoncée pendant le vol pour aller loin ! L’Archer franchit le gouffre seul (double saut + dash), brûle le mur de bois, et le Mage touche le cristal. La clé est sur une corniche d’Archer.', ({ rect, put }) => {
+    put(13, 7, '*'); // étoile cachée
+    put(5, 13, 'C');
+    rect(6, 14, 10, 1, '^'); // gouffre de 10 cases
+    put(16, 13, 'C');
+    rect(20, 1, 2, 13, 't'); // mur de bois
+    put(23, 6, 'x'); // cristal derrière le mur
+    rect(22, 10, 3, 1); // corniche de la clé
+    put(23, 9, 'K');
+    rect(25, 1, 1, 13, 'a');
+    put(27, 13, 'D');
+    put(2, 13, 'S');
   }, { abilities: true, fire: true, carry: true, hold: { 1: 0 } }),
+
   make('Brasier', 'Le mur de bois barre la route : brûlez-le. Dans la salle, trois choses doivent être vraies EN MÊME TEMPS : vous deux sur la plaque lourde, le cristal du Mage et la torche de l’Archer. Tirez depuis la plaque, vite : les flammes s’éteignent !', ({ rect, put }) => {
     put(25, 3, '*'); // étoile cachée
     rect(8, 1, 2, 13, 't'); // mur de bois
@@ -405,6 +410,7 @@ const LEVELS = [
     put(27, 13, 'D');
     put(2, 13, 'S');
   }, { abilities: true, fire: true, heavy: [1], and: [1], hold: { 1: 240 }, latch: { 1: 150 } }),
+
   /* ===== Chapitre 7 : Les Brumes (échange) ===== */
   make('Échange', 'L’Archer franchit le gouffre en dash. Visez-le avec l’éclair d’échange (bouton Échange, puis clic sur l’Archer) : le Mage prend sa place de l’autre côté ! Puis le Mage touche le cristal.', ({ rect, put }) => {
     put(19, 7, '*'); // étoile cachée
