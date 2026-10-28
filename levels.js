@@ -221,72 +221,81 @@ const LEVELS = [
   }, { abilities: true, dark: true, heavy: [1], latch: { 1: 240 } }),
 
   /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
-  make('Le sceau', 'Casse-tête : un indice n’apparaît que pour l’Archer (sur la corniche). Il le dicte au Mage, qui touche les trois cristaux dans le bon ordre.', ({ rect, put }) => {
-    put(19, 4, '*'); // étoile cachée
-    rect(2, 10, 3, 1); // corniche à 4 cases : l'Archer y lit l'indice
-    put(4, 8, 'z');
-    put(15, 4, 'z');
-    put(24, 7, 'z');
-    rect(12, 12, 3, 1);
-    rect(19, 11, 3, 1);
-    rect(26, 5, 1, 9, 'c');
-    put(28, 13, 'D');
+  make('Le sceau', 'Six symboles s’affichent uniquement pour l’Archer, sur sa corniche. Il les dicte au Mage, qui touche les trois cristaux dans cet ordre (moins de 7 secondes entre deux tirs, une erreur remet tout à zéro). Au-delà : une plaque, une clé en hauteur, et une grille qui se referme vite.', ({ rect, put }) => {
+    put(17, 1, '*'); // étoile cachée
+    rect(2, 9, 4, 1); // corniche de l’indice : l’Archer seul y monte
+    put(17, 3, 'z'); // cristal n°0
+    put(9, 5, 'z'); // cristal n°1
+    put(13, 9, 'z'); // cristal n°2
+    rect(19, 1, 1, 13, 'c'); // grille du sceau
+    put(21, 13, '2'); // plaque
+    rect(22, 10, 3, 1); // corniche de la clé : l’Archer seul
+    put(23, 9, 'K');
+    rect(25, 1, 1, 13, 'b'); // grille de sortie
+    put(27, 13, 'D');
     put(2, 13, 'S');
   }, {
     abilities: true,
-    sequence: { group: 3, order: [2, 0, 1], timeout: 1800 },
-    labels: [{ tx: 3, ty: 8, shapes: [2, 0, 1], role: 'archer', radius: 130 }],
+    sequence: { group: 3, order: [1, 2, 0, 2, 1, 0], timeout: 420 },
+    labels: [{ tx: 3, ty: 7, shapes: [1, 2, 0, 2, 1, 0], role: 'archer', radius: 130 }],
+    latch: { 2: 100 },
   }),
 
-  make('Synchro', 'Plaque, cristal et cible doivent être actifs en même temps : le Mage tient la plaque et tire sur le cristal, l’Archer vise la meurtrière quand elle s’ouvre.', ({ rect, put }) => {
-    put(23, 3, '*'); // étoile cachée
-    rect(5, 14, 7, 1, '^');
-    put(7, 13, 'r');
-    put(10, 13, 'r');
-    put(13, 13, 'C');
-    put(16, 13, '1');
-    put(16, 2, 'x'); // cristal juste au-dessus de la plaque
-    rect(19, 1, 2, 13); // mur jusqu'au plafond
-    rect(19, 10, 2, 1, 'w'); // meurtrière à volet
-    rect(19, 11, 2, 3, 'a'); // porte au pied du mur
-    put(22, 10, 'o');
-    rect(24, 10, 3, 1);
-    put(25, 9, 'K');
-    put(28, 13, 'D');
+  make('Synchro', 'Deux verrous à la suite. 1) Quelqu’un tient la plaque pendant que l’autre touche le cristal. 2) Plaque, cristal ET cible (derrière une meurtrière qui ne s’ouvre que par moments) doivent être actifs en même temps. Les grilles se rouvrent peu de temps : courez !', ({ rect, put }) => {
+    put(23, 2, '*'); // étoile cachée
+    put(5, 13, '1');
+    put(5, 2, 'x'); // cristal au-dessus de la première plaque
+    rect(9, 1, 1, 13, 'a');
+    put(11, 13, 'C');
+    put(13, 13, '2');
+    put(13, 2, 'y'); // cristal du second verrou
+    rect(22, 1, 2, 13); // mur jusqu’au plafond
+    rect(22, 10, 2, 1, 'v'); // meurtrière à volet
+    rect(22, 11, 2, 3, 'b'); // grille au pied du mur
+    put(26, 12, 'p'); // cible derrière le mur
+    rect(14, 10, 3, 1); // corniche de la clé : l’Archer seul
+    put(15, 9, 'K');
+    put(27, 13, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, and: [1], latch: { 1: 300 }, hold: { 1: 240 }, shutters: { 1: { period: 150, open: 80, phase: 0 } } }),
+  }, {
+    abilities: true,
+    and: [1, 2],
+    latch: { 1: 110, 2: 130 },
+    hold: { 1: 300, 2: 260 },
+    shutters: { 2: { period: 150, open: 70, phase: 0 } },
+  }),
 
-  make('Le grand saut', 'Sautez TOUS LES DEUX EN MÊME TEMPS (moins d’une seconde d’écart) : un pont et un escalier dorés apparaissent 6 secondes au-dessus des pics. Courez jusqu’à la clé ! Si vous tombez, recommencez le saut ensemble.', ({ rect, put }) => {
-    put(18, 4, '*'); // étoile cachée
-    rect(4, 14, 22, 1, '^');
-    rect(5, 12, 9, 1, 's'); // 1er pont
-    rect(14, 12, 3, 1); // îlot
-    put(15, 11, 'C');
-    rect(17, 11, 2, 1, 's'); // escalier doré
-    rect(19, 10, 2, 1, 's');
-    rect(21, 9, 2, 1, 's');
-    rect(23, 8, 2, 1, 's');
-    rect(25, 8, 4, 1); // plateau
-    put(27, 7, 'K');
-    put(28, 13, 'D');
-    put(2, 13, 'S');
+  make('Le grand saut', 'Sautez TOUS LES DEUX EN MÊME TEMPS (moins d’une demi-seconde d’écart) : un chemin doré apparaît 6 secondes au-dessus des pics. Prenez la clé, revenez sur vos pas (nouveau saut commun) et franchissez la porte, tout à gauche. Si vous tombez, vous repartez de l’îlot.', ({ rect, put }) => {
+    put(14, 3, '*'); // étoile cachée
+    rect(6, 14, 22, 1, '^');
+    rect(7, 12, 4, 1, 's');
+    rect(12, 11, 3, 1, 's');
+    rect(16, 10, 3, 1, 's');
+    rect(20, 10, 3, 1); // îlot
+    put(21, 9, 'C');
+    rect(24, 9, 2, 1, 's');
+    rect(26, 7, 3, 1); // plateau
+    put(27, 6, 'K');
+    put(4, 13, 'D');
+    put(1, 13, 'S');
   }, { sync: true }),
 
-  make('Le relais', 'Casse-tête à deux : une plaque ne reste pressée que tant qu’on est dessus. L’un tient la plaque du bas pour laisser passer l’autre, qui ouvre à son tour la porte du haut. À la fin, posez-vous chacun sur une plaque.', ({ rect, put }) => {
-    put(6, 5, '*'); // étoile cachée
-    put(7, 13, '1'); // plaque du bas : ouvre la porte du couloir bas
-    rect(4, 12, 3, 1); // escalier vers le couloir du haut
-    rect(8, 10, 3, 1);
-    rect(12, 8, 8, 1); // plancher entre les deux couloirs
-    rect(15, 9, 1, 5, 'a'); // porte du couloir bas
-    rect(15, 1, 1, 7, 'b'); // porte du couloir haut
-    put(21, 13, '2'); // plaque de la zone d'arrivée : ouvre la porte du haut
-    put(23, 13, '3'); // deux plaques éloignées : il faut être deux, une chacune
-    put(26, 13, '3');
-    rect(27, 1, 1, 13, 'c');
-    put(28, 13, 'D');
+  make('Le relais', 'Seul l’Archer peut grimper sur la corniche de la plaque de gauche. Seul le Mage passe sous la haute plateforme. Chacun tient une plaque pour ouvrir le passage de l’autre, puis il faut être DEUX sur la plaque lourde pour sortir.', ({ rect, put }) => {
+    put(10, 5, '*'); // étoile cachée
+    rect(3, 9, 3, 1); // corniche : l’Archer seul
+    put(4, 8, '1'); // plaque A (ouvre la grille du couloir bas)
+    rect(7, 8, 14, 1); // haute plateforme
+    rect(8, 9, 1, 5, 'a'); // grille du couloir bas
+    put(11, 13, '2'); // plaque B (ouvre la grille du couloir haut)
+    rect(14, 1, 1, 7, 'b'); // grille du couloir haut
+    put(19, 7, 'K');
+    rect(15, 14, 5, 1, '^'); // pics sous la plateforme
+    put(22, 13, '3'); // plaques lourdes
+    put(23, 13, '3');
+    rect(25, 1, 1, 13, 'c');
+    put(27, 13, 'D');
     put(1, 13, 'S');
-  }, { and: [3], latch: { 3: 150 } }),
+  }, { abilities: true, heavy: [3], latch: { 3: 100 } }),
 
   /* ===== Chapitre 5 : Jardins suspendus (ressorts) ===== */
   make('Tremplin', 'Le ressort propulse très haut : retombez dessus pour atteindre la clé. Le Mage ouvre la porte rose (orbe sur le cristal), l’Archer baisse la porte bleue (flèche sur la cible).', ({ rect, put }) => {
