@@ -272,6 +272,7 @@ const server = http.createServer(app);
 // Latence : on désactive l'algorithme de Nagle (qui retarde l'envoi des petits paquets) sur chaque connexion
 server.on('connection', (sock) => sock.setNoDelay(true));
 const wss = new WebSocketServer({ server });
+if (process.env.CORDEE_TEST) global.__wss = wss; // uniquement pour les tests automatiques
 
 const rooms = new Map(); // code -> room
 if (process.env.CORDEE_TEST) global.__rooms = rooms; // uniquement pour les tests automatiques
@@ -283,29 +284,31 @@ const TUT_STEPS = [
   { id: 'move', label: 'Se déplacer', key: '← → (ou Q D)' },
   { id: 'jump', label: 'Sauter', key: 'Espace' },
   { id: 'dash', label: 'Dash', key: 'Maj' },
-  { id: 'orb', label: 'Orbe (Mage)', key: 'clic gauche' },
-  { id: 'ice', label: 'Glace (Mage)', key: 'clic droit sur une rune' },
-  { id: 'swap', label: 'Échange de places (Mage)', key: 'bouton Échange, puis clic' },
-  { id: 'arrow', label: 'Flèche (Archer)', key: 'clic gauche' },
-  { id: 'fire', label: 'Feu (Archer)', key: 'bouton Feu (ou clic droit), puis clic' },
-  { id: 'dbl', label: 'Double saut (Archer)', key: 'Espace en l’air' },
+  { id: 'orb', label: 'Orbe (Mage)', key: 'clic gauche', kit: 'mage' },
+  { id: 'ice', label: 'Glace (Mage)', key: 'clic droit sur une rune', kit: 'mage' },
+  { id: 'swap', label: 'Échange de places (Mage)', key: 'bouton Échange, puis clic', kit: 'mage' },
+  { id: 'arrow', label: 'Flèche (Archer)', key: 'clic gauche', kit: 'archer' },
+  { id: 'fire', label: 'Feu (Archer)', key: 'bouton Feu (ou clic droit), puis clic', kit: 'archer' },
+  { id: 'dbl', label: 'Double saut (Archer)', key: 'Espace en l’air', kit: 'archer' },
   { id: 'grab', label: 'Porter son coéquipier', key: 'F', needs2: true },
   { id: 'throw', label: 'Le lancer', key: 'F encore', needs2: true },
-  { id: 'role', label: 'Échanger les rôles', key: 'T' },
   { id: 'emote', label: 'Emote', key: 'G, M ou J' },
   { id: 'mark', label: '« Regarde ici »', key: 'Ctrl + clic droit' },
   { id: 'hint', label: 'Indice', key: 'I' },
   { id: 'help', label: 'Aide', key: 'H' },
 ];
 const TUT_IDS = new Set(TUT_STEPS.map((x) => x.id));
-function tutNeed(room) {
+// Les rôles sont fixes : chacun ne doit valider que les touches de son propre rôle.
+function tutNeed(room, p) {
   const solo = room.players.size < 2;
-  return TUT_STEPS.filter((x) => !(x.needs2 && solo)).map((x) => x.id);
+  return TUT_STEPS.filter((x) => !(x.needs2 && solo) && (!x.kit || !p || x.kit === p.role)).map((x) => x.id);
 }
 function tutMsg(room) {
   const p = {};
+  const needBy = {};
   for (const [id, set] of room.tut) p[id] = [...set].filter((k) => TUT_IDS.has(k));
-  return { t: 'tut', need: tutNeed(room), p };
+  for (const q of room.players.values()) needBy[q.id] = tutNeed(room, q);
+  return { t: 'tut', needBy, p };
 }
 function tutStep(room, p, id) {
   if (!room || !room.level || !room.level.cfg.tutorial || room.status !== 'playing') return;
@@ -321,10 +324,9 @@ function tutStep(room, p, id) {
 }
 function tutComplete(room) {
   if (room.tutOk) return true;
-  const need = tutNeed(room);
   const list = [...room.players.values()];
   if (!list.length) return false;
-  const ok = list.every((p) => { const s = room.tut.get(p.id); return s && need.every((k) => s.has(k)); });
+  const ok = list.every((p) => { const s = room.tut.get(p.id); return s && tutNeed(room, p).every((k) => s.has(k)); });
   if (ok) room.tutOk = true;
   return ok;
 }
@@ -886,18 +888,6 @@ function resetPlayers(room) {
   }
 }
 
-// Applique le rôle d'un joueur en cours de niveau : on garde sa position et sa vitesse, on remet ses capacités à neuf
-function applyRole(room, p) {
-  p.kit = room.level.cfg.abilities ? p.role : 'plain';
-  p.airJump = true;
-  p.dashAvail = true;
-  p.dashT = 0;
-  p.dashCd = 0;
-  p.cd = [0, 0, 0];
-  p.jumpPending = false;
-  p.dashPending = false;
-}
-
 function hasBothRoles(room) {
   const roles = new Set([...room.players.values()].map((p) => p.role));
   return roles.has('mage') && roles.has('archer');
@@ -1285,29 +1275,6 @@ wss.on('connection', (ws) => {
         if (!room || room.status !== 'lobby' || !ROLES.includes(msg.role)) return;
         room.players.get(ws.id).role = msg.role;
         broadcast(room, lobbyMsg(room));
-        break;
-      }
-      case 'swaproles': {
-        // En pleine partie, n'importe quel joueur peut échanger son rôle avec celui de l'autre rôle (Mage <-> Archer)
-        const me = room && room.players.get(ws.id);
-        if (!me || room.status !== 'playing') return;
-        const now = Date.now();
-        if (now < (me.roleLockUntil || 0)) return; // petite pause pour éviter les échanges en rafale
-        const other = [...room.players.values()].find((q) => q !== me && q.role !== me.role);
-        const mine = me.role;
-        if (other) {
-          me.role = other.role;
-          other.role = mine;
-          other.roleLockUntil = now + 1500;
-          applyRole(room, other);
-        } else {
-          me.role = mine === 'mage' ? 'archer' : 'mage';
-        }
-        me.roleLockUntil = now + 1500;
-        applyRole(room, me);
-        broadcast(room, lobbyMsg(room));
-        tutStep(room, me, 'role');
-        if (other) tutStep(room, other, 'role');
         break;
       }
       case 'emote': {

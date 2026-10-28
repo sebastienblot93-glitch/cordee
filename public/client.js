@@ -292,7 +292,6 @@ function handle(msg) {
     case 'lobby':
       roomCode = msg.code;
       hostId = msg.hostId;
-      const prevRoles = new Map(players.map((q) => [q.id, q.role]));
       players = msg.players;
       levelList = msg.levels || [];
       chapterList = msg.chapters || [];
@@ -305,7 +304,6 @@ function handle(msg) {
         renderLobby();
       } else if (level) {
         updateHud();
-        rolesChanged(prevRoles);
         updateTeamBar();
         if (tutOn()) renderTutStep();
       }
@@ -579,8 +577,19 @@ function reactToState(prev, msg) {
         ring(s.tx + 12, s.ty + 14, '#ffd24a', 60);
         sparks(s.tx + 12, s.ty + 6, '#fff3a0', 10, 3.6, 36);
       });
+      if (level) {
+        let n = 0;
+        level.rows.forEach((row, ty) => {
+          for (let tx = 0; tx < row.length && n < 40; tx++) {
+            if (row[tx] !== 's') continue;
+            n++;
+            sparks(tx * 32 + 16, ty * 32 + 8, '#fff3a0', 5, 3, 30);
+            if (n % 3 === 0) ring(tx * 32 + 16, ty * 32 + 16, '#ffd24a', 34);
+          }
+        });
+      }
       shake(2);
-      toast('Synchro ! Les ponts dorés sont là, courez !');
+      toast('SYNCHRO réussie ! Les ponts dorés sont là, courez !');
     } else if (e[0] === 'grab') {
       sfx('click', 60);
       ring(e[1] + 12, e[2] + 14, '#ffffff', 36);
@@ -1326,34 +1335,6 @@ function grabPartner() {
   send({ t: 'grab' });
 }
 
-function swapRoles() {
-  if (!level || players.length < 2) return;
-  send({ t: 'swaproles' });
-}
-
-// Appelé quand le serveur renvoie la liste des joueurs en pleine partie : un rôle a peut-être changé
-function rolesChanged(prev) {
-  let any = false;
-  players.forEach((p) => {
-    if (!prev.has(p.id) || prev.get(p.id) === p.role) return;
-    any = true;
-    const s = sprites.get(p.id);
-    if (!s) return;
-    const col = p.role === 'mage' ? '#b79cff' : '#9be564';
-    s.pop = 12;
-    s.castT = 0;
-    sparks(s.tx + PW / 2, s.ty + PH / 2, col, 12, 3.6, 40);
-    ring(s.tx + PW / 2, s.ty + PH / 2, col, 44);
-    flash(s.tx + PW / 2, s.ty + PH / 2, col, 64, 14);
-  });
-  if (!any) return;
-  armed = 1;
-  updateRoleHint();
-  window.Sfx.play('swap', 80);
-  const me = myPlayer();
-  if (me && level.cfg.abilities) toast(`Rôles échangés : tu es maintenant ${me.role === 'mage' ? 'le Mage' : 'l’Archer'} !`);
-}
-
 function updateTeamBar() {
   const bar = $('teambar');
   bar.innerHTML = '';
@@ -1364,17 +1345,6 @@ function updateTeamBar() {
     b.addEventListener('mousedown', (e) => e.preventDefault());
     bar.append(b);
   };
-  if (level.cfg.abilities && players.length >= 2) {
-    const b = document.createElement('button');
-    b.className = 'team swap';
-    b.innerHTML = 'Échanger les rôles<small>T</small>';
-    b.title = 'Toi et ton coéquipier échangez vos rôles (Mage ↔ Archer), à tout moment';
-    b.onclick = swapRoles;
-    add(b);
-    const sep = document.createElement('span');
-    sep.className = 'sep';
-    bar.append(sep);
-  }
   if (level.cfg.carry && players.length >= 2) {
     const b = document.createElement('button');
     b.className = 'team swap';
@@ -1653,10 +1623,9 @@ function helpHtml() {
     + '<li><kbd>Maj</kbd> : dash, une course éclair (pour les deux joueurs)</li>'
     + (level && level.cfg.carry ? '<li><kbd>F</kbd> : porter ton coéquipier (il doit être tout près), puis <kbd>F</kbd> encore pour le lancer devant toi. Le porté peut sauter pour descendre.</li>' : '')
     + (level && level.cfg.link ? '<li><b>Blocs verts liés</b> : ils disparaissent si vous vous éloignez de plus de 7 cases. Le fil entre vous vire au rouge avant la rupture.</li>' : '')
-    + (level && level.cfg.sync ? '<li><b>Ponts dorés</b> : sautez <b>tous les deux en même temps</b> (moins d’une seconde d’écart) pour les faire apparaître 6 secondes.</li>' : '')
+    + (level && level.cfg.sync ? '<li><b>Cases dorées pointillées</b> (flèches ⌃ qui montent) : ce sont des ponts cachés. Appuyez sur <kbd>Espace</kbd> <b>tous les deux à moins d’une demi-seconde d’écart</b> : ils apparaissent 6 secondes. Les pastilles en haut de l’écran indiquent qui a déjà sauté.</li>' : '')
     + (level && level.cfg.heavy && level.cfg.heavy.length ? '<li><b>Plaque lourde</b> : il faut être <b>deux</b> dessus pour l’enfoncer.</li>' : '')
     + '<li>Coincés ? <kbd>R</kbd> recommence le niveau</li>'
-    + '<li><kbd>T</kbd> échange ton rôle avec ton coéquipier (Mage ↔ Archer), à tout moment</li>'
     + '<li><kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> : emotes (une bulle apparaît au-dessus de toi)</li>'
     + '<li><kbd>Ctrl</kbd> + clic droit : « regarde ici », un repère visible par ton coéquipier</li>'
     + '<li><kbd>P</kbd> coupe le son · <kbd>H</kbd> rouvre cette aide</li></ul>';
@@ -1704,13 +1673,13 @@ $('btn-hint').onclick = () => revealHint();
 
 /* ---------- Tutoriel : une consigne à la fois ---------- */
 // Le serveur valide chaque touche (étape « step ») ; ici on n'affiche que la prochaine consigne utile pour ce joueur.
-// L'ordre de la liste est l'ordre du parcours. Une étape avec « kit » ne s'affiche que si on a ce rôle (après T, celles de l'autre rôle apparaissent).
+// L'ordre de la liste est l'ordre du parcours. Une étape avec « kit » ne s'affiche que pour ce rôle (les rôles sont fixes).
 const TUT_PLAN = [
   { tour: '#hud-level', text: 'Bienvenue ! Je vais tout t’expliquer, une chose à la fois. D’abord l’écran. En haut : le chapitre et le nom du niveau (le chrono s’affiche au milieu quand le niveau en a un).' },
   { tour: '#hud-keys', text: 'Les clés du niveau : il faut les ramasser toutes pour ouvrir la porte. Ton nombre de chutes s’affiche aussi ici.' },
   { tour: '#hud-ping', text: 'Ton ping : le délai avec le serveur, en millisecondes. Plus il est bas, plus le jeu est fluide.' },
   { tour: '#actionbar', text: 'Tes sorts, selon ton rôle (Mage ou Archer). On clique sur un sort pour l’armer, puis dans le jeu pour viser. La jauge montre la recharge. Raccourcis : 1, 2, 3.' },
-  { tour: '#teambar', text: 'Ici : échanger les rôles avec ton coéquipier (T), le porter / le lancer (F) et les emotes (G, M, J).' },
+  { tour: '#teambar', text: 'Ici : porter / lancer ton coéquipier (F) et les emotes (G, M, J). Ton rôle (Mage ou Archer) est fixe pendant toute la partie : on se complète !' },
   { tour: '#level-hint', text: 'L’indice du niveau reste masqué : touche I. Le regarder compte comme une aide (pour la médaille « sans indice »).' },
   { tour: '#audio-ctl', text: 'Enfin : tes Records et tes Étoiles, la musique et son volume, le fantôme de ta meilleure partie (👻) et le son (touche P). La visite est finie : place au jeu !' },
   { step: 'move', at: [2, 11], text: 'Bouge avec <kbd>←</kbd> <kbd>→</kbd> (ou <kbd>Q</kbd> <kbd>D</kbd>). Va à gauche, puis à droite.' },
@@ -1724,13 +1693,12 @@ const TUT_PLAN = [
   { step: 'ice', kit: 'mage', at: [24, 12], text: 'Mage : <b>clic droit</b> sur la rune (le symbole au sol, à droite) : tu crées un bloc de glace qui fond au bout d’un moment.' },
   { step: 'swap', kit: 'mage', text: 'Mage : clique sur le bouton <b>Échange</b> (ou touche <kbd>E</kbd>), puis clique sur ton coéquipier : vous échangez vos places.' },
   { step: 'dbl', kit: 'archer', at: [24, 9], text: 'Archer : appuie deux fois sur <kbd>Espace</kbd>, la deuxième fois en l’air : c’est le double saut. Monte sur la corniche.' },
-  { step: 'role', text: 'Appuie sur <kbd>T</kbd> : toi et ton coéquipier échangez vos rôles (Mage ↔ Archer). Ensuite, essayez les pouvoirs de l’autre rôle !' },
   { step: 'emote', text: 'Appuie sur <kbd>G</kbd>, <kbd>M</kbd> ou <kbd>J</kbd> : une emote apparaît au-dessus de toi.' },
   { step: 'mark', text: '<kbd>Ctrl</kbd> + <b>clic droit</b> dans le jeu : « regarde ici », un repère que ton coéquipier voit.' },
   { step: 'hint', text: 'Appuie sur <kbd>I</kbd> pour lire l’indice du niveau.' },
   { step: 'help', text: 'Appuie sur <kbd>H</kbd> pour ouvrir l’aide complète (<kbd>Échap</kbd> pour la fermer).' },
 ];
-const tut = { need: [], p: {}, tour: 0, tourOn: false, timer: 0, seen: false };
+const tut = { need: [], needBy: {}, p: {}, tour: 0, tourOn: false, timer: 0, seen: false };
 const tutOn = () => !!(level && level.cfg.tutorial);
 const tutTourStages = () => TUT_PLAN.filter((x) => x.tour && (x.tour !== '#hud-keys' || (level && level.keys.length)));
 
@@ -1751,7 +1719,8 @@ function tutCurrent() { // prochaine consigne : { stage, n, total } ou { end: tr
 
 function onTut(msg) {
   const before = new Set(tut.p[myId] || []);
-  tut.need = msg.need || [];
+  tut.need = (msg.needBy && msg.needBy[myId]) || [];
+  tut.needBy = msg.needBy || {};
   tut.p = msg.p || {};
   if (!tutOn()) return;
   (tut.p[myId] || []).forEach((id) => {
@@ -1772,11 +1741,13 @@ function renderTutStep() {
   let head;
   if (cur.end) {
     const needN = tut.need.length;
-    const mateDone = mate ? tut.need.filter((id) => (tut.p[mate.id] || []).includes(id)).length : needN;
+    const mateNeed = mate ? (tut.needBy[mate.id] || []) : [];
+    const mateDone = mate ? mateNeed.filter((id) => (tut.p[mate.id] || []).includes(id)).length : needN;
+    const mateN = mate ? mateNeed.length : needN;
     head = 'Tutoriel terminé pour toi';
-    text = mateDone >= needN
+    text = mateDone >= mateN
       ? 'Bravo ! Tout est validé par vous deux : la grille du fond est ouverte. Prenez la clé, puis rejoignez la porte tous les deux.'
-      : `Bravo, tu as tout validé ! Ton coéquipier en est à ${mateDone}/${needN} : aide-le (il peut te demander de changer de rôle avec <kbd>T</kbd>). La grille du fond s’ouvrira quand il aura fini.`;
+      : `Bravo, tu as tout validé ! Ton coéquipier en est à ${mateDone}/${mateN} : encourage-le (<kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd>). La grille du fond s’ouvrira quand il aura fini.`;
   } else {
     head = `Tutoriel · touche ${Math.min(cur.n, cur.total)}/${cur.total}`;
     text = cur.stage.text;
@@ -2195,7 +2166,6 @@ window.addEventListener('keydown', (e) => {
   if (/^(Digit|Numpad)[1-3]$/.test(e.code) && !e.repeat) return armSlot(Number(e.code.slice(-1)));
   const emo = e.ctrlKey || e.metaKey || e.altKey ? -1 : EMOTES.findIndex((m) => m.key === String(e.key).toLowerCase());
   if (emo >= 0) { if (!e.repeat) sendEmote(emo); return; }
-  if (e.code === 'KeyT' && !e.repeat) return swapRoles();
   if (e.code === 'KeyF' && !e.repeat) return grabPartner();
   if (e.code === 'KeyR' && !e.repeat) return send({ t: 'restart' });
   if (e.code === 'KeyN' && !e.repeat) return send({ t: 'skip' }); // seul le chef de room est écouté
@@ -2780,41 +2750,65 @@ function drawLinkBlock(x, y, T, on, ratio, frame) {
   blitSprite(spr, x, y);
 }
 
-function drawSyncBlock(x, y, T, ticks, frame) {
+function drawSyncBlock(x, y, T, ticks, frame, tx, ty) {
   const on = ticks > 0;
   if (on && ticks < 50 && Math.floor(frame / 4) % 2 === 0) return; // bientôt fini : clignote
-  const spr = cachedSprite(`sync|${on}`, T + 4, T + 4, 2, 2, () => {
-    if (!on) {
-      ctx.globalAlpha = 0.6;
-      rrPath(2.5, 2.5, T - 5, T - 5, 5);
-      ctx.setLineDash([3, 5]);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffd24a';
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(255,210,74,.55)';
-      ctx.beginPath();
-      ctx.moveTo(T / 2, T / 2 - 9);
-      ctx.lineTo(T / 2 + 6, T / 2 + 2);
-      ctx.lineTo(T / 2 - 6, T / 2 + 2);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(T / 2, T / 2 - 1);
-      ctx.lineTo(T / 2 + 6, T / 2 + 10);
-      ctx.lineTo(T / 2 - 6, T / 2 + 10);
-      ctx.closePath();
-      ctx.fill();
-      return;
-    }
-    rrPath(0.5, 0.5, T - 1, T - 1, 5);
-    fillOut(vGrad(0, T, '#fff3b0', '#e8a523'), 1.8, '#7a4a10');
-    ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.fillRect(4, 3, T - 8, 3);
-    sparkle4(T / 2, T / 2 + 1, 7, 'rgba(255,255,255,.95)');
-  });
-  blitSprite(spr, x, y);
-  if (on) glowAt(x + T / 2, y + T / 2, 26, '#ffd24a', 0.35);
+  if (on) {
+    const spr = cachedSprite('sync|on', T + 4, T + 4, 2, 2, () => {
+      rrPath(0.5, 0.5, T - 1, T - 1, 5);
+      fillOut(vGrad(0, T, '#fff3b0', '#e8a523'), 1.8, '#7a4a10');
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      ctx.fillRect(4, 3, T - 8, 3);
+      sparkle4(T / 2, T / 2 + 1, 7, 'rgba(255,255,255,.95)');
+    });
+    blitSprite(spr, x, y);
+    glowAt(x + T / 2, y + T / 2, 26, '#ffd24a', 0.35);
+    return;
+  }
+  // Pont doré « en attente » : cadre pointillé qui pulse, deux chevrons qui montent (= « sautez ! »)
+  let armed = false;
+  world.jw.forEach((v) => { if (v > 0) armed = true; });
+  const pulse = 0.5 + 0.5 * Math.sin(frame * (armed ? 0.5 : 0.12));
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = `rgba(255,210,74,${(armed ? 0.3 : 0.14) + pulse * 0.12})`;
+  rrPath(2, 2, T - 4, T - 4, 5);
+  ctx.fill();
+  ctx.setLineDash([4, 4]);
+  ctx.lineDashOffset = -frame * 0.35;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(255,214,90,${0.65 + pulse * 0.35})`;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const rise = (frame * 0.35) % 10;
+  for (let k = 0; k < 2; k++) {
+    const yy = T / 2 + 6 - ((rise + k * 10) % 20) + 2;
+    const a = Math.max(0, 1 - Math.abs(yy - T / 2) / 11);
+    if (a <= 0.05) continue;
+    ctx.strokeStyle = `rgba(255,236,150,${a})`;
+    ctx.beginPath();
+    ctx.moveTo(T / 2 - 6, yy + 3);
+    ctx.lineTo(T / 2, yy - 3);
+    ctx.lineTo(T / 2 + 6, yy + 3);
+    ctx.stroke();
+  }
+  ctx.restore();
+  // Étiquette au-dessus de chaque groupe de ponts dorés
+  const row = level.rows[ty];
+  if (tx > 0 && row[tx - 1] === 's') return;
+  if (ty > 0 && level.rows[ty - 1][tx] === 's') return;
+  let n = 1;
+  while (row[tx + n] === 's') n++;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = '800 12px Nunito, sans-serif';
+  const cx = x + (n * T) / 2;
+  const by = y - 8 - Math.abs(Math.sin(frame * 0.08)) * 3;
+  outlinedText('SAUTEZ ENSEMBLE', cx, by, armed ? '#fff3a0' : '#ffd24a');
+  ctx.restore();
 }
 
 // Le fil qui relie les joueurs (niveaux avec blocs liés) : vert, jaune puis rouge à l'approche de la rupture
@@ -2889,8 +2883,39 @@ function drawCoopOverlay(mine) {
       ctx.font = '700 11px Nunito, sans-serif';
       outlinedText('PONT ACTIF : courez !', W / 2, 33, '#ffe08a');
     } else {
-      ctx.font = '700 11px Nunito, sans-serif';
-      outlinedText('Sautez ENSEMBLE pour faire apparaître le pont', W / 2, 36, '#ffe08a');
+      // Bandeau : les deux joueurs sous forme de pastilles, qui se remplissent quand chacun a sauté
+      const bw = 262;
+      const bx = W / 2 - bw / 2;
+      rrPath(bx, 26, bw, 30, 15);
+      ctx.fillStyle = 'rgba(14,10,40,.78)';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(255,210,74,.85)';
+      ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.font = '800 12px Nunito, sans-serif';
+      outlinedText('Ponts dorés : sautez ENSEMBLE', bx + 14, 45, '#ffe08a');
+      ctx.textAlign = 'center';
+      players.slice(0, 2).forEach((p, i) => {
+        const cxp = bx + bw - 40 + i * 26;
+        const jumped = (world.jw.get(p.id) || 0) > 0;
+        ctx.beginPath();
+        ctx.arc(cxp, 41, 9, 0, TAU);
+        ctx.fillStyle = jumped ? '#ffd24a' : 'rgba(255,255,255,.12)';
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = p.color || '#fff';
+        ctx.stroke();
+        if (jumped) {
+          ctx.strokeStyle = '#3a2208';
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.moveTo(cxp - 4, 41);
+          ctx.lineTo(cxp - 1, 44.5);
+          ctx.lineTo(cxp + 4.5, 37.5);
+          ctx.stroke();
+        }
+      });
     }
     // un joueur a sauté : on l'indique, et on invite l'autre à sauter vite
     const waiting = players.filter((p) => (world.jw.get(p.id) || 0) > 0);
@@ -2902,13 +2927,13 @@ function drawCoopOverlay(mine) {
         const cx = s.x + PW / 2;
         if (left > 0) { // a déjà sauté : anneau qui se vide
           ctx.beginPath();
-          ctx.arc(cx, s.y + PH / 2, 22, -Math.PI / 2, -Math.PI / 2 + (left / 20) * TAU);
+          ctx.arc(cx, s.y + PH / 2, 22, -Math.PI / 2, -Math.PI / 2 + (left / Phys.COOP.syncWindow) * TAU);
           ctx.strokeStyle = '#ffd24a';
           ctx.lineWidth = 3;
           ctx.stroke();
         } else { // doit sauter maintenant !
           ctx.font = '800 14px Nunito, sans-serif';
-          outlinedText('SAUTE !', cx, s.y - 30 - Math.abs(Math.sin(frame * 0.3)) * 4, '#ffd24a');
+          outlinedText('SAUTE MAINTENANT !', cx, s.y - 30 - Math.abs(Math.sin(frame * 0.3)) * 4, '#ffd24a');
         }
       });
     }
@@ -3764,7 +3789,7 @@ function draw() {
       } else if (ch === 'l') {
         drawLinkBlock(x, y, T, !!world.lk, world.ld, frame);
       } else if (ch === 's') {
-        drawSyncBlock(x, y, T, world.sy, frame);
+        drawSyncBlock(x, y, T, world.sy, frame, tx, ty);
       } else if (ch === 'j') {
         const idx = ty * L.w + tx;
         const a = springAnim.get(idx) || 0;
