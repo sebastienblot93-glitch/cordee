@@ -502,6 +502,33 @@ const LEVELS = [
   }, { heavy: [1], link: true, sync: true, carry: true, latch: { 1: 100, 3: 150 } }),
 
 
+  make('Le carillon', 'Deux étages. Bas : cristal ET cible en moins de 3 s ouvrent la grille, puis trois blocs de glace (10 s) sur les runes au-dessus des pics. Le même escalier de glace mène au trou du plafond. Haut : brûlez le mur de bois, puis cristal, cible ET torche en même temps ouvrent la dernière grille.', ({ rect, put }) => {
+    put(17, 9, '*'); // étoile cachée
+    rect(1, 7, 28, 1); // dalle intermédiaire
+    rect(26, 7, 2, 1, '.'); // trou vers l’étage
+    put(2, 13, 'S');
+    put(6, 9, 'x'); // cristal (groupe 1)
+    put(4, 10, 'o'); // cible (groupe 1)
+    rect(8, 8, 1, 6, 'a');
+    put(9, 13, 'C');
+    rect(10, 14, 10, 1, '^'); // gouffre x=10..19
+    put(12, 13, 'r');
+    put(15, 13, 'r');
+    put(18, 13, 'r');
+    put(20, 13, 'C');
+    put(22, 12, 'r'); // escalier de glace vers le trou
+    put(24, 10, 'r');
+    put(26, 9, 'r');
+    rect(14, 1, 2, 6, 't'); // mur de bois
+    put(8, 2, 'y'); // cristal (groupe 2)
+    put(5, 3, 'p'); // cible (groupe 2)
+    put(11, 4, 'g'); // torche (groupe 2)
+    rect(8, 4, 3, 1); // corniche de la clé
+    put(9, 3, 'K');
+    rect(3, 1, 1, 6, 'b');
+    put(2, 6, 'D');
+  }, { abilities: true, fire: true, and: [1, 2], hold: { 1: 170, 2: 200 }, latch: { 1: 150, 2: 150 } }),
+
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
     put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
