@@ -596,6 +596,40 @@ const LEVELS = [
     put(2, 13, 'S');
   }, { abilities: true, swap: true, heavy: [1], latch: { 1: 60 }, hold: { 2: 900 }, shutters: { 1: { period: 150, open: 80, phase: 0 } } }),
 
+  make('La cime', 'L’ultime ascension, en trois étages. 1) Plaques lourdes (la grille retombe vite), pont lié sur les pics, puis sautez ensemble pour l’escalier doré. 2) L’Archer brûle le mur de bois ; cristal, cible ET torche en même temps ouvrent la grille ; le Mage bâtit l’escalier de glace jusqu’au trou. 3) Un mur de 3 cases : l’Archer saute dessus, le Mage échange sa place avec lui ; puis les plaques lourdes et la dernière grille.', ({ rect, put }) => {
+    put(8, 3, '*'); // étoile cachée : dernier étage
+    rect(1, 10, 21, 1); // dalle 1 (trou à x=22..28)
+    rect(4, 6, 25, 1); // dalle 2 (trou à x=1..3)
+    // étage 1
+    put(2, 13, 'S');
+    put(4, 13, '1');
+    put(5, 13, '1');
+    rect(9, 11, 1, 3, 'a');
+    put(10, 13, 'C');
+    rect(12, 14, 8, 1, '^'); // pics x=12..19
+    rect(12, 13, 3, 1, 'l');
+    rect(16, 13, 3, 1, 'l');
+    put(20, 13, 'C');
+    rect(26, 12, 2, 1, 's'); // escalier doré
+    rect(23, 11, 2, 1, 's');
+    // étage 2
+    rect(14, 7, 2, 3, 't'); // mur de bois
+    put(11, 7, 'y'); // cristal (groupe 2)
+    put(8, 8, 'p'); // cible (groupe 2)
+    put(12, 8, 'g'); // torche (groupe 2)
+    rect(6, 7, 1, 3, 'b'); // grille b
+    put(3, 8, 'r'); // escalier de glace
+    put(1, 7, 'r');
+    // étage 3
+    rect(12, 3, 2, 3); // mur de 3 cases : l’Archer monte dessus, le Mage échange sa place
+    put(22, 5, 'C');
+    put(23, 5, 'K');
+    put(24, 5, '3');
+    put(25, 5, '3');
+    rect(26, 3, 1, 3, 'c');
+    put(27, 5, 'D');
+  }, { abilities: true, fire: true, swap: true, sync: true, link: true, heavy: [1, 3], and: [2], hold: { 2: 220 }, latch: { 1: 60, 2: 150, 3: 60 } }),
+
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
     put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
