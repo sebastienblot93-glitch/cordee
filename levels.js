@@ -159,7 +159,7 @@ const LEVELS = [
   }, { abilities: true, and: [1], hold: { 1: 150 }, latch: { 1: 150 } }),
 
   make('Pont de glace', 'Un gouffre immense. Le Mage fait naître des blocs de glace sur les runes (clic droit, 3 blocs au plus, ils fondent en 10 s). L’Archer, lui, le franchit d’un double saut et d’un dash. Un cristal derrière le gouffre ouvre la grille.', ({ rect, put }) => {
-    rect(26, 11, 3, 1, '#'); put(27, 10, '*'); // étoile cachée
+    rect(26, 10, 3, 1, '#'); put(27, 9, '*'); // étoile cachée
     rect(7, 14, 10, 1, '^'); // gouffre de 10 cases
     put(9, 13, 'r');
     put(12, 13, 'r');
@@ -172,7 +172,7 @@ const LEVELS = [
   }, { abilities: true, hold: { 1: 0 } }),
 
   make('Meurtrière', 'Le mur ne s’ouvre que par la meurtrière, et elle ne s’ouvre que par moments. L’Archer tire sur la cible au bon moment ; le Mage touche le cristal pendant que la cible est active. Puis passez la grille ensemble.', ({ rect, put }) => {
-    rect(21, 11, 3, 1, '#'); put(22, 10, '*'); // étoile cachée
+    rect(21, 10, 3, 1, '#'); put(22, 9, '*'); // étoile cachée
     put(4, 8, 'x'); // cristal du Mage
     rect(12, 1, 2, 13);
     rect(12, 8, 2, 1, 'w'); // meurtrière à volet
@@ -224,7 +224,7 @@ const LEVELS = [
 
   /* ===== Chapitre 4 : Sanctuaire (synchronisation et casse-têtes) ===== */
   make('Les symboles', 'Six symboles s’affichent uniquement pour l’Archer, sur sa corniche. Il les dicte au Mage, qui touche les trois cristaux dans cet ordre (moins de 7 secondes entre deux tirs, une erreur remet tout à zéro). Au-delà : une plaque, une clé en hauteur, et une grille qui se referme vite.', ({ rect, put }) => {
-    rect(15, 11, 3, 1, '#'); put(16, 10, '*'); // étoile cachée
+    rect(15, 10, 3, 1, '#'); put(16, 9, '*'); // étoile cachée
     rect(2, 9, 4, 1); // corniche de l’indice : l’Archer seul y monte
     put(17, 3, 'z'); // cristal n°0
     put(9, 5, 'z'); // cristal n°1
@@ -357,7 +357,7 @@ const LEVELS = [
 
   /* ===== Chapitre 6 : La Forge (flèche de feu, bois, torches) ===== */
   make('Le bûcher', 'Le bois barre la route : l’Archer l’embrase avec la flèche de feu (bouton Feu, puis clic sur le bois). Derrière : cristal du Mage et torche de l’Archer doivent brûler en même temps. Puis un second mur de bois, une clé, et une dernière torche.', ({ rect, put }) => {
-    rect(14, 11, 2, 1, '#'); put(15, 10, '*'); // étoile cachée
+    rect(14, 10, 2, 1, '#'); put(15, 9, '*'); // étoile cachée
     rect(6, 1, 2, 13, 't'); // mur de bois n°1
     put(11, 4, 'x'); // cristal
     put(14, 6, 'f'); // torche
@@ -371,7 +371,7 @@ const LEVELS = [
   }, { abilities: true, fire: true, and: [1], hold: { 1: 420, 2: 0 }, latch: { 1: 200 } }),
 
   make('Les quatre braseros', 'La porte exige quatre flammes en même temps : le cristal du Mage et les trois torches de l’Archer. Elles s’éteignent vite, et le bois qui protège la dernière torche doit brûler d’abord !', ({ rect, put }) => {
-    rect(13, 11, 3, 1, '#'); put(14, 10, '*'); // étoile cachée
+    rect(13, 10, 3, 1, '#'); put(14, 9, '*'); // étoile cachée
     rect(8, 12, 1, 2);
     rect(18, 12, 1, 2);
     put(5, 4, 'f');
@@ -793,23 +793,29 @@ const TIMERS = {
 LEVELS.forEach((l) => { l.timer = TIMERS[l.name] !== undefined ? TIMERS[l.name] : DEFAULT_TIMER; });
 
 // Médailles : temps (en secondes, depuis le début du niveau) à ne pas dépasser.
-//   or      : temps ≤ ratio d'or × minuteur      argent : temps ≤ ratio d'argent × minuteur      bronze : niveau réussi
-// Un ratio par chapitre : les premiers chapitres sont plus exigeants (on y va vite), le dernier plus généreux (minuteurs déjà serrés).
-// Diamant : le palier ultime, un temps de coordination parfaite (environ 58 % du temps d'or, déduit des parcours des bots
-// de test auxquels on laisse de la marge : un humain ne rejoue pas un bot).
+// Les paliers se déduisent du temps de référence REF : le meilleur parcours que les bots de test réussissent (le temps qu'il faut
+// réellement pour résoudre le niveau, en comptant l'attente des mécanismes), pas d'un pourcentage du minuteur.
+//   diamant : ≈ 1,8 × REF  ET aucune chute (coordination quasi parfaite)       or : ≈ 3 × REF      argent : ≈ 5 × REF      bronze : niveau réussi
 // Pour régler un niveau à la main : MEDALS = { 'Nom du niveau': [secondes pour l\u2019or, secondes pour l\u2019argent, secondes pour le diamant (facultatif)] }
-const GOLD_RATIOS = [0.4, 0.45, 0.45, 0.5, 0.5, 0.5, 0.5, 0.55, 0.6];
-const SILVER_RATIOS = [0.65, 0.7, 0.7, 0.75, 0.75, 0.75, 0.75, 0.8, 0.85];
+const REF = {
+  'Le sas': 10.2, 'Funambules': 7.4, 'La tour': 6.8, 'Les remparts': 8.9,
+  'Verrou': 5.3, 'Pont de glace': 4.0, 'Meurtrière': 4.3,
+  'Lueur': 13.3, 'Fil de lumière': 8.3,
+  'Les symboles': 9.1, 'Triple verrou': 5.3, 'Les ponts d’or': 10.1, 'La navette': 5.1,
+  'Les trampolines': 8.9, 'Le cirque': 5.0, 'Les lotus': 5.9,
+  'Le bûcher': 7.5, 'Les quatre braseros': 10.0, 'Le bateleur': 6.9, 'La fonderie': 5.9,
+  'Le passage': 8.6, 'La colonne': 8.1, 'La brume épaisse': 10.6, 'Le col': 10.4,
+  'Bivouac': 12.0, 'Le carillon': 13.3, 'Le boyau': 23.1, 'Le code': 24.3, 'La cadence': 9.2, 'La cime': 17.9,
+  'Le pont-levis': 8.6, 'Le cachot': 16.8, 'La salle du trône': 13.6,
+};
 // Le combat de boss dure plus longtemps qu'un niveau : temps fixés à la main [or, argent, diamant]
 const MEDALS = { 'Le Gardien': [110, 170, 65] };
 LEVELS.forEach((l) => {
   const m = MEDALS[l.name];
-  const g = GOLD_RATIOS[l.chapter] || 0.5;
-  const sv = SILVER_RATIOS[l.chapter] || 0.75;
-  const t = l.timer || 90;
-  l.gold = m ? m[0] : Math.max(10, Math.round(t * g));
-  l.silver = m ? m[1] : Math.max(l.gold + 5, Math.round(t * sv));
-  l.diamond = m && m[2] ? m[2] : Math.max(6, Math.min(l.gold - 3, Math.round(l.gold * 0.58)));
+  const ref = REF[l.name] || (l.timer || 90) / 8;
+  l.diamond = m && m[2] ? m[2] : Math.round(ref * 1.8 + 1);
+  l.gold = m ? m[0] : Math.max(l.diamond + 4, Math.round(ref * 3 + 2));
+  l.silver = m ? m[1] : Math.max(l.gold + 6, Math.round(ref * 5 + 4));
 });
 
 module.exports = { LEVELS, CHAPTERS };

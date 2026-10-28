@@ -190,8 +190,9 @@
     const s = sec - m * 60;
     return `${m}:${(dec ? s.toFixed(1) : String(Math.floor(s))).padStart(dec ? 4 : 2, '0')}`;
   }
-  function medalFor(sec, gold, silver, diamond) {
-    return diamond && sec <= diamond ? 'diamond' : sec <= gold ? 'gold' : sec <= silver ? 'silver' : 'bronze';
+  // Le diamant exige le temps ET zéro chute (deaths = nombre de chutes du niveau en cours ; undefined : on ne tient pas compte des chutes)
+  function medalFor(sec, gold, silver, diamond, deaths) {
+    return diamond && sec <= diamond && !deaths ? 'diamond' : sec <= gold ? 'gold' : sec <= silver ? 'silver' : 'bronze';
   }
   function titleFor(n) {
     let t = TITLES[0][1];
@@ -231,7 +232,7 @@
       }
       const b = data.best[l.name];
       const row = el('div', `rec-row${cur && cur.name === l.name ? ' cur' : ''}${b ? ' done' : ''}`);
-      row.title = `${l.name}\n💎 ≤ ${fmt(l.diamond)} · 🥇 ≤ ${fmt(l.gold)} · 🥈 ≤ ${fmt(l.silver)} · chrono ${fmt(l.timer)}`;
+      row.title = `${l.name}\n💎 ≤ ${fmt(l.diamond)} sans chute · 🥇 ≤ ${fmt(l.gold)} · 🥈 ≤ ${fmt(l.silver)} · chrono ${fmt(l.timer)}`;
       row.append(el('span', 'rec-medal', b ? MEDALS[RANK_MEDAL[b.m || 1]].emoji : '·'));
       row.append(el('span', 'rec-name', `${i + 1}. ${l.name}`));
       row.append(el('span', 'rec-time', b && b.t != null ? fmt(b.t, true) : `🥇 ${fmt(l.gold)}`));
@@ -463,7 +464,7 @@
     let medal = null;
     let info = null;
     if (!skipped && l) {
-      medal = medalFor(sec, l.gold, l.silver, l.diamond);
+      medal = medalFor(sec, l.gold, l.silver, l.diamond, res.deaths);
       const noDeath = res.deaths === 0;
       const noHelp = !l.help && !res.help; // l'indice consulté par l'un des joueurs compte pour tout le duo
       const b = data.best[l.name];
@@ -502,7 +503,7 @@
     if (info && l) {
       if (medal === 'bronze') goal.textContent = `Argent à ≤ ${fmt(l.silver)} · or à ≤ ${fmt(l.gold)}`;
       else if (medal === 'silver') goal.textContent = `Il vous manquait ${r1(sec - l.gold)} s pour l’or (≤ ${fmt(l.gold)})`;
-      else if (medal === 'gold') goal.textContent = `Diamant à ≤ ${fmt(l.diamond, true)} : ${r1(sec - l.diamond)} s à gagner`;
+      else if (medal === 'gold') goal.textContent = sec <= l.diamond ? `Temps de diamant (≤ ${fmt(l.diamond, true)}), mais il faut aussi aucune chute` : `Diamant à ≤ ${fmt(l.diamond, true)} sans chute : ${r1(sec - l.diamond)} s à gagner`;
       else goal.textContent = 'Coordination parfaite : diamant !';
     } else goal.textContent = '';
     const badges = $('res-badges');
@@ -568,7 +569,7 @@
       if (cur && cur.tutorial) return;
       const k = n || 1;
       today().d += k;
-      if (cur) data.stats.fails[cur.name] = (data.stats.fails[cur.name] || 0) + k;
+      if (cur) { cur.d = (cur.d || 0) + k; data.stats.fails[cur.name] = (data.stats.fails[cur.name] || 0) + k; }
       statsDirty = true;
     },
     streaks,
@@ -582,7 +583,7 @@
     // Médaille que l'on aurait en finissant maintenant (temps écoulé en secondes)
     tier(elapsed) {
       if (!cur || !cur.gold) return null;
-      return medalFor(elapsed, cur.gold, cur.silver, cur.diamond);
+      return medalFor(elapsed, cur.gold, cur.silver, cur.diamond, cur.d || 0);
     },
     goldAt: () => (cur ? cur.gold : 0),
     silverAt: () => (cur ? cur.silver : 0),
