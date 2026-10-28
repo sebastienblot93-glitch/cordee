@@ -12,6 +12,8 @@ const GROUP_COLORS = { 1: '#ff6b9d', 2: '#4dd8e8', 3: '#9be564' };
 const ROLE_LABEL = { mage: 'Mage', archer: 'Archer' };
 const LIGHT_MAGE = 100; // rayon de la lumière du Mage dans les niveaux sombres
 const LIGHT_SELF = 44; // rayon de la lueur de chaque joueur
+const LIGHT_ORB = 78; // lueur de l'orbe du Mage en vol (niveaux sombres)
+const ORB_TRAIL_LIFE = 40; // durée (images) de la traînée lumineuse de l'orbe
 const LIGHT_TORCH = 92; // rayon d'une torche allumée
 // Couleur d'ambiance de chaque chapitre (cadre, titres, boutons)
 const ACCENT = { prairie: '#9be564', arcane: '#b79cff', dark: '#8aa0ff', sanctuary: '#ffd24a', garden: '#ff9ad0', forge: '#ff8a2a', mist: '#9fe0ee', summit: '#ff9fb8', citadel: '#ff6bd0' };
@@ -3367,7 +3369,7 @@ function labelNear(lb, T, lightSources) {
   const cx = lb.tx * T + T / 2;
   const cy = lb.ty * T + T / 2;
   let near = Infinity;
-  for (const s of lightSources) near = Math.min(near, Math.hypot(s.x - cx, s.y - cy));
+  for (const s of lightSources) if (!s.fx) near = Math.min(near, Math.hypot(s.x - cx, s.y - cy)); // l'orbe ne compte pas : il faut s'approcher
   return near;
 }
 function drawSymbolRow(shapes, cx, cy, step, size, done) {
@@ -3954,6 +3956,23 @@ function draw() {
     const c = tileCenter(idx);
     lights.push({ x: c.x, y: c.y, r: 60, c: '#ff8a2a', a: 0.3 });
   });
+  // L'orbe du Mage éclaire son passage (niveaux sombres) : une lueur au bout de l'orbe et une traînée qui s'estompe en 2/3 de seconde
+  if (level.cfg.dark) {
+    const aheadL = Math.min((performance.now() - world.recvAt) / 16.7, 2);
+    const trail = level.orbTrail || (level.orbTrail = []);
+    for (const pr of world.proj) {
+      if (pr[0] !== 'orb') continue;
+      const ox = pr[1] + pr[3] * aheadL;
+      const oy = pr[2] + pr[4] * aheadL;
+      lights.push({ x: ox, y: oy, r: LIGHT_ORB, c: '#b79cff', a: 0.3, fx: true });
+      if (frame % 2 === 0) trail.push({ x: ox, y: oy, f: frame });
+    }
+    while (trail.length && frame - trail[0].f > ORB_TRAIL_LIFE) trail.shift();
+    for (const t of trail) {
+      const k = 1 - (frame - t.f) / ORB_TRAIL_LIFE;
+      lights.push({ x: t.x, y: t.y, r: 26 + (LIGHT_ORB - 26) * k, c: '#b79cff', a: 0, fx: true });
+    }
+  }
   if (level.cfg.dark && level.star && !world.sr) lights.push({ x: level.star.x + T / 2, y: level.star.y + T / 2, r: 40, c: '#ffe27a', a: 0.28 }); // l'étoile scintille dans le noir
 
   level.rows.forEach((row, ty) => {
@@ -4064,7 +4083,7 @@ function draw() {
     // lueur colorée de chaque source par-dessus l'obscurité
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    for (const l of lights) window.Themes.halo(ctx, l.x, l.y, l.r * 0.95, l.c, l.a);
+    for (const l of lights) if (l.a > 0.01) window.Themes.halo(ctx, l.x, l.y, l.r * 0.95, l.c, l.a);
     ctx.restore();
   }
 
