@@ -477,110 +477,30 @@ const LEVELS = [
   }, { abilities: true, swap: true, fire: true, and: [1], hold: { 1: 400 }, latch: { 1: 200 } }),
 
   /* ===== Chapitre 8 : Le Sommet (très difficile) ===== */
-  make('Camp de base', 'Trois épreuves d’affilée, sans pouvoirs. 1) Posez-vous À DEUX sur la plaque lourde et passez la porte avant qu’elle ne se referme. 2) Le fil : restez à moins de 7 cases pour que les blocs verts tiennent. 3) Sautez ENSEMBLE pour faire apparaître l’escalier doré : clé, puis porte !', ({ rect, put }) => {
-    put(19, 6, '*'); // étoile cachée
-    put(4, 13, '1'); // plaque lourde
+  make('Bivouac', 'Sans pouvoirs, deux étages. Bas : 1) plaque lourde (à deux), la grille se referme vite ; 2) le fil : blocs verts au-dessus des pics, restez à moins de 7 cases ; 3) sautez ENSEMBLE pour faire apparaître l’escalier doré. Haut : la clé, puis un mur de 4 cases — portez-vous (F) et lancez-vous de l’autre côté, la plaque ouvre la grille pour le second.', ({ rect, put }) => {
+    put(17, 10, '*'); // étoile cachée : au-dessus des blocs liés
+    rect(1, 7, 28, 1); // plancher intermédiaire
+    rect(26, 7, 2, 1, '.'); // trou vers l’étage
+    put(4, 13, '1'); // plaques lourdes
     put(5, 13, '1');
-    rect(7, 1, 1, 13, 'a');
-    put(8, 13, 'C');
-    rect(9, 14, 9, 1, '^');
-    rect(9, 13, 2, 1, 'l');
-    rect(12, 12, 2, 1, 'l');
-    rect(15, 11, 2, 1, 'l');
-    put(19, 13, 'C');
-    rect(20, 14, 7, 1, '^');
-    rect(20, 12, 2, 1, 's');
-    rect(22, 11, 2, 1, 's');
-    rect(24, 10, 2, 1, 's');
-    put(25, 9, 'K');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { heavy: [1], link: true, sync: true, latch: { 1: 90 } }),
-  make('Métronome', 'Les dalles plongent à tour de rôle, en vague : une dalle se solidifie juste quand la précédente va couler. Enchaînez les sauts sans vous arrêter ! Au milieu, posez-vous à deux sur les plaques pour ouvrir la porte, puis repartez dans le rythme.', ({ rect, put }) => {
-    put(20, 9, '*'); // étoile cachée
-    rect(4, 14, 22, 1, '^'); // pics de x=4 à x=25
-    rect(5, 13, 3, 1, 'u'); // vague : u (groupe 3) puis v (2) puis w (1)...
-    rect(10, 13, 3, 1, 'v');
-    rect(15, 13, 3, 1, 'w');
-    rect(19, 13, 3, 1); // îlot central
-    put(19, 12, '1'); // plaques lourdes
-    put(20, 12, '1');
-    put(21, 12, 'C');
-    rect(22, 1, 1, 13, 'a'); // porte devant la suite
-    rect(23, 13, 3, 1, 'u');
-    put(24, 12, 'K');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { heavy: [1], latch: { 1: 150 }, shutters: { 1: { period: 240, open: 140, phase: 220 }, 2: { period: 240, open: 140, phase: 60 }, 3: { period: 240, open: 140, phase: 140 } } }),
-
-  make('Tempête', 'Trois verrous. 1) Cristal ET cible ensemble : le Mage touche le cristal, l’Archer la cible, en moins de 3 secondes. 2) Le gouffre : la glace du Mage (runes). 3) La meurtrière du mur s’ouvre en rythme : l’Archer tire par la fente sur la cible, le chrono est serré.', ({ rect, put }) => {
-    put(18, 3, '*'); // étoile cachée
-    put(6, 4, 'x'); // cristal (groupe 1)
-    put(4, 8, 'o'); // cible (groupe 1)
-    rect(8, 1, 1, 13, 'a');
+    rect(8, 8, 1, 6, 'a');
     put(9, 13, 'C');
-    rect(10, 14, 10, 1, '^'); // gouffre
-    put(13, 13, 'r');
-    put(17, 13, 'r');
-    put(20, 13, 'C');
-    rect(24, 1, 2, 13); // mur
-    rect(24, 10, 2, 1, 'w'); // meurtrière à volet
-    rect(24, 11, 2, 3, 'b'); // porte au pied du mur
-    put(27, 10, 'p'); // cible derrière le mur
-    rect(21, 10, 2, 1); // corniche : seul l'Archer l'atteint
-    put(22, 9, 'K');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, and: [1], hold: { 1: 180, 2: 900 }, latch: { 1: 150 }, shutters: { 1: { period: 150, open: 80, phase: 0 } } }),
-  make('Cheminée', 'Une montée de trois corniches à 4 cases d’écart : seul l’Archer y monte (double saut). Le Mage doit échanger sa place avec lui à chaque étage (bouton Échange, puis clic sur l’Archer). Les pics en dessous : ne tombez pas ! En haut : clé, cristal, puis la descente.', ({ rect, put }) => {
-    put(28, 1, '*'); // étoile cachée
-    rect(9, 14, 17, 1, '^'); // pics de x=9 à x=25
-    rect(3, 10, 4, 1); // corniche A
-    rect(9, 6, 4, 1); // corniche B
-    put(10, 5, 'C');
-    rect(14, 3, 4, 1); // corniche C (tout en haut)
-    put(15, 2, 'K');
-    put(17, 2, 'x'); // cristal
-    rect(20, 5, 3, 1); // descente
-    rect(23, 9, 2, 1);
-    rect(25, 1, 1, 13, 'a');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, swap: true, hold: { 1: 600 } }),
-  make('Pointe de givre', 'Le sommet approche. Brûlez le mur de bois (Archer). Dans la salle, cristal ET torche en même temps (moins de 4 secondes d’écart). Puis la montée : le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s), et vous grimpez tous les deux avant qu’ils ne disparaissent !', ({ rect, put }) => {
-    put(26, 1, '*'); // étoile cachée
-    rect(7, 1, 2, 13, 't'); // mur de bois
-    put(11, 5, 'x'); // cristal
-    put(13, 7, 'f'); // torche
-    rect(16, 1, 1, 13, 'a');
-    put(18, 12, 'r'); // marches de glace
-    put(20, 10, 'r');
-    put(22, 8, 'r');
-    rect(24, 8, 2, 6); // gros mur : le sommet est de l'autre côté
-    put(24, 7, 'K');
-    put(27, 13, 'D');
-    put(2, 13, 'S');
-  }, { abilities: true, fire: true, and: [1], hold: { 1: 220 }, latch: { 1: 120 } }),
-  make('Le Sommet', 'L’ultime ascension. Le fil vous lie dans l’escalier. En haut, une seule porte, quatre conditions EN MÊME TEMPS : vous deux sur la plaque lourde, le cristal, la torche et la cible. Puis le dernier gouffre : sautez ensemble !', ({ rect, put }) => {
-    put(6, 1, '*'); // étoile cachée
-    rect(3, 12, 3, 1, 'l'); // escalier lié
-    rect(7, 10, 3, 1, 'l');
-    rect(10, 8, 7, 1); // plate-forme du sommet
-    put(11, 7, '1'); // plaque lourde
-    put(12, 7, '1');
-    put(14, 3, 'x'); // cristal
-    put(16, 5, 'f'); // torche
-    put(16, 2, 'o'); // cible
-    rect(18, 1, 1, 13, 'a');
-    put(19, 13, 'C');
-    rect(20, 14, 7, 1, '^');
-    rect(20, 12, 2, 1, 's');
-    rect(22, 11, 2, 1, 's');
+    rect(11, 14, 9, 1, '^');
+    rect(12, 13, 2, 1, 'l'); // blocs liés
+    rect(15, 12, 2, 1, 'l');
+    rect(17, 13, 2, 1, 'l');
+    put(21, 13, 'C');
+    rect(22, 12, 2, 1, 's'); // escalier doré
     rect(24, 10, 2, 1, 's');
-    put(25, 9, 'K');
-    put(27, 13, 'D');
+    rect(26, 9, 2, 1, 's');
+    put(25, 6, 'C');
+    rect(14, 3, 1, 4, 'c'); // mur-grille de 4 cases
+    put(12, 6, '3');
+    put(6, 6, 'K');
+    put(2, 6, 'D');
     put(2, 13, 'S');
-  }, { abilities: true, fire: true, link: true, sync: true, heavy: [1], and: [1], hold: { 1: 360 }, latch: { 1: 240 } }),
+  }, { heavy: [1], link: true, sync: true, carry: true, latch: { 1: 100, 3: 150 } }),
+
 
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
