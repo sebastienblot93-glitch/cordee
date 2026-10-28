@@ -500,16 +500,16 @@
         <p class="hint"><kbd>R</kbd> recommence le niveau · <kbd>N</kbd> niveau suivant (chef de room) · <kbd>B</kbd> retour au salon · <kbd>P</kbd> coupe le son · <kbd>G</kbd> <kbd>M</kbd> <kbd>J</kbd> emotes · <kbd>Maj</kbd> dash<button id="btn-lobby" class="ghost" type="button" title="Revenir au choix des personnages et des niveaux, sans quitter la room">Salon (B)</button><button id="btn-help" class="ghost" type="button">Aide (H)</button><button id="btn-hint" class="ghost" type="button">Indice (I)</button></p>
       </div>
       <div id="side-col">
-        <div id="yt-wrap">
-          <div id="yt-player"></div>
-          <div id="yt-title" class="hint"></div>
-        </div>
         <div id="chat" aria-label="Chat de la room">
           <div id="chat-log" role="log" aria-live="polite"><p id="chat-empty" class="hint">Aucun message pour l’instant.</p></div>
           <form id="chat-form" autocomplete="off">
             <input id="chat-input" type="text" maxlength="120" placeholder="Entrée pour écrire…" aria-label="Message">
             <button id="chat-send" type="submit" class="ghost">OK</button>
           </form>
+        </div>
+        <div id="yt-wrap">
+          <div id="yt-player"></div>
+          <div id="yt-title" class="hint"></div>
         </div>
       </div>
     </div>
