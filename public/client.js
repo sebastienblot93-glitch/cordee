@@ -38,6 +38,8 @@ let pingTimer = null;
 let myId = null;
 let hostId = null;
 let roomCode = null;
+let session = null; // { name, skin, color } pour se reconnecter tout seul
+let reconnect = { on: false, tries: 0, timer: 0 };
 let players = []; // [{id, name, color, role, skin}]
 let levelList = []; // [{name, roles, chapter}]
 let chapterList = []; // [{name, theme}]
@@ -254,6 +256,38 @@ function myKit() {
 }
 
 /* ---------- Réseau ---------- */
+// Coupure (redémarrage du serveur, réseau) : on retente toutes les 1 à 4 s pendant ~2 minutes, puis on se
+// replace dans la même room (recréée avec le même code si le serveur l'a perdue).
+function showReconnect(on, text) {
+  const el = $('reconnect');
+  if (!el) return;
+  el.classList.toggle('show', !!on);
+  if (text) el.textContent = text;
+}
+function tryReconnect() {
+  if (!reconnect.on) { reconnect.on = true; reconnect.tries = 0; }
+  if (reconnect.tries >= 40) return giveUpReconnect();
+  const n = ++reconnect.tries;
+  showReconnect(true, 'Connexion perdue… reconnexion en cours (' + n + ')');
+  clearTimeout(reconnect.timer);
+  reconnect.timer = setTimeout(() => {
+    const me = myPlayer();
+    connect(() => send({
+      t: 'resume', code: roomCode, name: session.name, skin: session.skin, color: session.color,
+      role: me ? me.role : undefined, host: !!me && hostId === myId,
+    }));
+  }, Math.min(1000 + n * 500, 4000));
+}
+function giveUpReconnect() {
+  reconnect.on = false;
+  clearTimeout(reconnect.timer);
+  showReconnect(false);
+  roomCode = null;
+  show('menu');
+  setError('Connexion perdue. Recrée ou rejoins une room.');
+  level = null;
+  lastChapter = -1;
+}
 function connect(onOpen) {
   const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
   ws = new WebSocket(proto + location.host);
@@ -263,7 +297,9 @@ function connect(onOpen) {
     onOpen();
   };
   ws.onclose = () => {
-    if (screens.menu.classList.contains('active')) return;
+    if (screens.menu.classList.contains('active') && !reconnect.on) return;
+    clearInterval(pingTimer);
+    if (roomCode && session) return tryReconnect(); // en salle ou en jeu : on se reconnecte tout seul
     show('menu');
     setError('Connexion perdue. Recrée ou rejoins une room.');
     level = null;
@@ -285,9 +321,14 @@ function handle(msg) {
   switch (msg.t) {
     case 'joined':
       myId = msg.id;
-      clearChat();
+      if (reconnect.on) { // reconnexion réussie : on repart de l'écran où l'on est (le serveur renvoie le salon ou le niveau)
+        reconnect.on = false;
+        showReconnect(false);
+        if (msg.resumed) toast('Reconnecté !');
+      } else clearChat();
       break;
     case 'error':
+      if (reconnect.on) return giveUpReconnect();
       setError(msg.msg);
       break;
     case 'lobby':
@@ -2100,14 +2141,16 @@ function renderLobby() {
 
 $('btn-create').onclick = () => {
   setError('');
-  connect(() => send({ t: 'create', name: $('name').value, skin: look.skin, color: look.color }));
+  session = { name: $('name').value, skin: look.skin, color: look.color };
+  connect(() => send({ t: 'create', name: session.name, skin: session.skin, color: session.color }));
 };
 
 $('btn-join').onclick = () => {
   const code = $('code').value.trim();
   if (code.length !== 4) return setError('Le code contient 4 lettres.');
   setError('');
-  connect(() => send({ t: 'join', code, name: $('name').value, skin: look.skin, color: look.color }));
+  session = { name: $('name').value, skin: look.skin, color: look.color };
+  connect(() => send({ t: 'join', code, name: session.name, skin: session.skin, color: session.color }));
 };
 
 $('role-select').onchange = () => send({ t: 'role', role: $('role-select').value });
@@ -3344,7 +3387,7 @@ function drawLabel(lb, T, lightSources) {
   if (lb.role && lb.role !== kit) return;
   if (labelNear(lb, T, lightSources) > lb.radius) return;
   if (level.labelSeen) level.labelSeen.add(lb);
-  level.labelNearAt = frame;
+  lb.nearAt = frame; // le code ne s'affiche que pendant qu'on est à portée
 }
 // Balise : repère pulsant à l'emplacement de l'indice, visible de partout par l'Archer (dessinée par-dessus l'obscurité)
 function drawLabelBeacon(lb, T, lightSources) {
@@ -3370,11 +3413,12 @@ function drawLabelBeacon(lb, T, lightSources) {
   ctx.closePath(); ctx.fill();
   ctx.restore();
 }
-// Code lu : une fois l'indice lu de près, le code reste affiché juste au-dessus de la balise « INDICE » (avec l'avancement du Mage)
+// Code : affiché au-dessus de la balise « INDICE » uniquement quand l'Archer est à portée de l'indice (avec l'avancement du Mage)
 function drawLabelNotebook(world, T) {
   if (!level.labelSeen || !level.labelSeen.size) return;
   for (const lb of level.labelSeen) {
     if (lb.role && lb.role !== myKit()) continue;
+    if (lb.nearAt !== frame) continue; // loin de l'indice : rien (la balise suffit)
     const step = 30;
     const w = 28 + lb.shapes.length * step;
     const h = 40;
@@ -3382,7 +3426,7 @@ function drawLabelNotebook(world, T) {
     const ly = lb.ty * T + T / 2;
     const cx = Math.min(Math.max(lx, w / 2 + 8), LW - w / 2 - 8); // reste dans l'écran
     const top = Math.max(34, ly - 24 - 12 - h - 6); // au-dessus du mot « INDICE »
-    const reading = level.labelNearAt === frame; // l'Archer est à portée de l'indice : le cadre brille
+    const reading = true;
     ctx.save();
     ctx.fillStyle = 'rgba(14, 10, 40, .85)';
     rrPath(cx - w / 2, top, w, h, 8); ctx.fill();
@@ -3395,7 +3439,7 @@ function drawLabelNotebook(world, T) {
     ctx.fillStyle = '#ffe27a';
     ctx.font = 'bold 9px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CODE (à dicter)', cx, top + 11);
+    ctx.fillText('CODE', cx, top + 11);
     drawSymbolRow(lb.shapes, cx, top + 26, step, 7, world.seq.done ? lb.shapes.length : world.seq.p);
     ctx.restore();
   }

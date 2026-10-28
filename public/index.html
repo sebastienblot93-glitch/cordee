@@ -150,6 +150,8 @@
     button.swatch.taken { opacity: .25; cursor: not-allowed; }
     ul.players canvas { width: 20px; height: 26px; flex: none; image-rendering: auto; background: none; border-radius: 0; }
     .mute-btn { padding: .25rem .6rem; font-size: .7rem; }
+    #reconnect { display: none; position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 40; background: #7a2e2e; color: #fff; border: 2px solid #ff8a8a; border-radius: 8px; padding: .45rem .9rem; font-size: .85rem; }
+    #reconnect.show { display: block; }
     #audio-ctl { position: fixed; top: 8px; right: 8px; z-index: 20; display: flex; gap: .4rem; }
     #audio-ctl button { background: rgba(22, 22, 58, .85); }
     #audio-ctl { align-items: center; }
@@ -514,6 +516,8 @@
       </div>
     </div>
   </section>
+
+  <div id="reconnect" role="status" aria-live="polite"></div>
 
   <div id="audio-ctl">
     <button id="btn-records" class="ghost mute-btn" type="button">Records</button>

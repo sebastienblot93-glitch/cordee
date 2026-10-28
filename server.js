@@ -1193,12 +1193,13 @@ function lobbyMsg(room) {
   };
 }
 
-function addPlayer(room, ws, name, skin, wantColor) {
+function addPlayer(room, ws, name, skin, wantColor, wantRole) {
   const used = new Set([...room.players.values()].map((p) => p.color));
   const color = (COLORS.includes(wantColor) && !used.has(wantColor) && wantColor)
     || COLORS.find((c) => !used.has(c)) || COLORS[0];
   const counts = ROLES.map((r) => [...room.players.values()].filter((p) => p.role === r).length);
-  const role = counts[0] <= counts[1] ? 'mage' : 'archer';
+  let role = counts[0] <= counts[1] ? 'mage' : 'archer';
+  if (ROLES.includes(wantRole) && counts[ROLES.indexOf(wantRole)] === 0) role = wantRole; // reconnexion : on garde son rôle s'il est libre
   const abilities = room.level.cfg.abilities;
   const player = Object.assign(newPlayerState(abilities ? role : 'plain'), {
     id: ws.id, ws, name, color, role, skin: cleanSkin(skin), cd: [0, 0, 0], jumpPending: false, dashPending: false, jpSeen: 0, carrying: null, carriedBy: null, grabCd: 0, jumpAt: -999,
@@ -1258,6 +1259,24 @@ wss.on('connection', (ws) => {
         addPlayer(fresh, ws, cleanName(msg.name), msg.skin, msg.color);
         send(ws, { t: 'joined', id: ws.id });
         broadcast(fresh, lobbyMsg(fresh));
+        break;
+      }
+      case 'resume': {
+        // Reconnexion automatique après une coupure (redémarrage du serveur, réseau) : on retrouve sa room, ou on la recrée avec le même code
+        if (room) return;
+        const code = String(msg.code || '').toUpperCase().trim();
+        if (!/^[A-Z]{4}$/.test(code)) return send(ws, { t: 'error', msg: 'Room introuvable. Vérifie le code.' });
+        let target = rooms.get(code);
+        if (!target) {
+          target = { code, hostId: null, status: 'lobby', players: new Map(), tickCount: 0, timer: 0, resumed: true };
+          freshRoomState(target, 0);
+          rooms.set(code, target);
+        } else if (target.players.size >= MAX_PLAYERS) return send(ws, { t: 'error', msg: 'Room pleine.' });
+        addPlayer(target, ws, cleanName(msg.name), msg.skin, msg.color, msg.role);
+        if (msg.host && target.resumed && target.players.size <= 2) target.hostId = ws.id; // l'ancien chef reprend la main
+        send(ws, { t: 'joined', id: ws.id, resumed: true });
+        broadcast(target, lobbyMsg(target));
+        if (target.status !== 'lobby') send(ws, startMsg(target));
         break;
       }
       case 'join': {
