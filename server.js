@@ -1333,6 +1333,13 @@ wss.on('connection', (ws) => {
         if (keepTut) { room.tut = keepTut.tut; room.tutOk = keepTut.ok; broadcast(room, tutMsg(room)); }
         break;
       }
+      case 'tolobby': {
+        // Retour au salon (choix des rôles et du niveau) sans quitter la room : n'importe quel joueur peut le demander
+        if (!room || room.status === 'lobby') return;
+        room.bossResume = 0;
+        backToLobby(room);
+        break;
+      }
       case 'skip': {
         if (!room || room.hostId !== ws.id) return;
         if (room.status === 'won') loadLevel(room, nextIndex(room.levelIndex)); // le chef passe l'écran de résultat

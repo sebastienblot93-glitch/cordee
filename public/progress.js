@@ -538,9 +538,10 @@
   }
   $('res-replay').onclick = () => hooks.replay();
   $('res-next').onclick = () => hooks.next();
+  $('res-lobby').onclick = () => hooks.lobby();
 
   /* ---------- Interface pour client.js ---------- */
-  const hooks = { toast() {}, replay() {}, next() {}, help() {} };
+  const hooks = { toast() {}, replay() {}, next() {}, lobby() {}, help() {} };
   window.Progress = {
     setHooks(h) { Object.assign(hooks, h); },
     fmt,
