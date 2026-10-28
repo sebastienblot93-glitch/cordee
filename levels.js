@@ -557,6 +557,27 @@ const LEVELS = [
     put(27, 5, 'D');
   }, { abilities: true, fire: true, dark: true, link: true, heavy: [1], latch: { 1: 80, 2: 150, 3: 130 } }),
 
+  make('Le code', 'Huit symboles ne s’affichent que pour l’Archer, sur sa corniche. Il les dicte ; le Mage doit toucher les quatre cristaux dans cet ordre (moins de 5 s entre deux tirs, une erreur remet tout à zéro). Les piliers cachent les cristaux : il faut courir d’une salle à l’autre par les tunnels. Alors seulement la dernière grille s’ouvre.', ({ rect, put }) => {
+    put(20, 10, '*'); // étoile cachée : salle 3
+    rect(9, 5, 2, 7); // pilier 1 (tunnel en bas)
+    rect(17, 5, 2, 7); // pilier 2
+    rect(24, 5, 2, 7, '#'); // pilier 3
+    rect(24, 12, 1, 2, 'c'); // grille du sceau dans le tunnel 3
+    rect(2, 9, 4, 1); // corniche de l’indice : l’Archer seul
+    put(13, 2, 'z'); // cristal n°0
+    put(6, 3, 'z'); // cristal n°1
+    put(21, 3, 'z'); // cristal n°2
+    put(3, 10, 'z'); // cristal n°3
+    rect(26, 10, 3, 1); // corniche de la clé
+    put(27, 9, 'K');
+    put(27, 13, 'D');
+    put(2, 13, 'S');
+  }, {
+    abilities: true,
+    sequence: { group: 3, order: [2, 1, 3, 0, 2, 0, 3, 1], timeout: 300 },
+    labels: [{ tx: 3, ty: 7, shapes: [2, 1, 3, 0, 2, 0, 3, 1], role: 'archer', radius: 150 }],
+  }),
+
   /* ===== Chapitre 9 : La Citadelle (boss final) ===== */
   make('Les Douves', 'Chaque seconde compte. 1) L’Archer embrase le mur de bois. 2) Le Mage pose trois blocs de glace sur les runes (ils fondent en 10 s) : traversez en courant. 3) Dans l’îlot : cristal, cible ET torche en même temps ouvrent la grille. 4) Des dalles plongent à tour de rôle au-dessus des pics : montez de dalle en dalle. L’Archer prend la clé sur la corniche.', ({ rect, put }) => {
     put(21, 9, '*'); // étoile cachée, sur la corniche de l'îlot
