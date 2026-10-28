@@ -258,7 +258,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, {
     abilities: true,
-    sequence: { group: 3, order: [1, 2, 0, 2, 1, 0], timeout: 420 },
+    sequence: { group: 3, order: [1, 2, 0, 2, 1, 0], timeout: 560 },
     labels: [{ tx: 3, ty: 7, shapes: [1, 2, 0, 2, 1, 0], role: 'archer', radius: 170 }],
     latch: { 2: 100 },
   }),
@@ -613,7 +613,7 @@ const LEVELS = [
     put(2, 13, 'S');
   }, {
     abilities: true,
-    sequence: { group: 3, order: [2, 1, 3, 0, 2, 0, 3, 1], timeout: 300 },
+    sequence: { group: 3, order: [2, 1, 3, 0, 2, 0, 3, 1], timeout: 560 },
     labels: [{ tx: 3, ty: 7, shapes: [2, 1, 3, 0, 2, 0, 3, 1], role: 'archer', radius: 170 }],
   }),
 
@@ -712,7 +712,7 @@ const LEVELS = [
   }, {
     abilities: true,
     dark: true,
-    sequence: { group: 3, order: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], timeout: 360 },
+    sequence: { group: 3, order: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], timeout: 640 },
     labels: [{ tx: 2, ty: 8, shapes: [3, 0, 4, 2, 1, 3, 2, 0, 4, 1], role: 'archer', radius: 130 }],
   }),
 

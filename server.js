@@ -934,6 +934,7 @@ function startMsg(room) {
       fire: !!def.fire,
       swap: !!def.swap,
       seqGroup: def.sequence ? def.sequence.group : 0,
+      seqLen: def.sequence && def.sequence.order ? def.sequence.order.length : 0,
       labels: def.labels || [],
       link: !!def.link,
       sync: !!def.sync,
