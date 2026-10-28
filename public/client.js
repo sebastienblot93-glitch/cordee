@@ -3370,26 +3370,35 @@ function drawLabelBeacon(lb, T, lightSources) {
   ctx.closePath(); ctx.fill();
   ctx.restore();
 }
-// Carnet de l'Archer : le code déjà lu reste affiché en haut de l'écran, avec l'avancement du Mage
-function drawLabelNotebook(world) {
+// Code lu : une fois l'indice lu de près, le code reste affiché juste au-dessus de la balise « INDICE » (avec l'avancement du Mage)
+function drawLabelNotebook(world, T) {
   if (!level.labelSeen || !level.labelSeen.size) return;
-  const lb = [...level.labelSeen][0];
-  if (lb.role && lb.role !== myKit()) return;
-  const step = 30;
-  const w = 28 + lb.shapes.length * step;
-  const cx = LW / 2;
-  ctx.save();
-  ctx.fillStyle = 'rgba(14, 10, 40, .78)';
-  rrPath(cx - w / 2, 34, w, 40, 8); ctx.fill();
-  const reading = level.labelNearAt === frame; // l'Archer est à portée de l'indice : le carnet brille
-  ctx.strokeStyle = reading ? '#ffe27a' : 'rgba(255,226,122,.7)'; ctx.lineWidth = reading ? 2.5 : 1.5;
-  rrPath(cx - w / 2, 34, w, 40, 8); ctx.stroke();
-  ctx.fillStyle = '#ffe27a';
-  ctx.font = 'bold 9px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('CODE (à dicter)', cx, 45);
-  drawSymbolRow(lb.shapes, cx, 60, step, 7, world.seq.done ? lb.shapes.length : world.seq.p);
-  ctx.restore();
+  for (const lb of level.labelSeen) {
+    if (lb.role && lb.role !== myKit()) continue;
+    const step = 30;
+    const w = 28 + lb.shapes.length * step;
+    const h = 40;
+    const lx = lb.tx * T + T / 2;
+    const ly = lb.ty * T + T / 2;
+    const cx = Math.min(Math.max(lx, w / 2 + 8), LW - w / 2 - 8); // reste dans l'écran
+    const top = Math.max(34, ly - 24 - 12 - h - 6); // au-dessus du mot « INDICE »
+    const reading = level.labelNearAt === frame; // l'Archer est à portée de l'indice : le cadre brille
+    ctx.save();
+    ctx.fillStyle = 'rgba(14, 10, 40, .85)';
+    rrPath(cx - w / 2, top, w, h, 8); ctx.fill();
+    ctx.strokeStyle = reading ? '#ffe27a' : 'rgba(255,226,122,.7)'; ctx.lineWidth = reading ? 2.5 : 1.5;
+    rrPath(cx - w / 2, top, w, h, 8); ctx.stroke();
+    if (Math.abs(cx - lx) > 4) { // trait vers la balise quand le cadre est décalé
+      ctx.strokeStyle = 'rgba(255,226,122,.5)'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(cx, top + h); ctx.lineTo(lx, ly - 24); ctx.stroke(); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#ffe27a';
+    ctx.font = 'bold 9px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('CODE (à dicter)', cx, top + 11);
+    drawSymbolRow(lb.shapes, cx, top + 26, step, 7, world.seq.done ? lb.shapes.length : world.seq.p);
+    ctx.restore();
+  }
 }
 
 /* ---------- Rendu : joueurs ---------- */
@@ -4017,7 +4026,7 @@ function draw() {
 
   level.cfg.labels.forEach((lb) => drawLabel(lb, T, lights)); // par-dessus l'obscurité : l'indice reste lisible dès qu'on est à portée
   level.cfg.labels.forEach((lb) => drawLabelBeacon(lb, T, lights));
-  drawLabelNotebook(world);
+  drawLabelNotebook(world, T);
   if (level.cfg.link) drawTether();
 
   if (tutOn()) drawTutMarker(frame);
